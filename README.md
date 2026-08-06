@@ -2,6 +2,8 @@
 
 > WorkBuddy 技能：把 PRD / UI 设计图 / XMind 需求，结构化地转成可直接执行的测试用例（10 列 Excel 主产物）。
 
+English version: [README.en.md](README.en.md)
+
 ---
 
 ## 一、这个技能解决什么
