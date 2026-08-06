@@ -1,3 +1,15 @@
+# Skills · WorkBuddy 技能集合
+
+本仓库是 WorkBuddy 技能的**集合**，每个技能独立存放在同名子目录中，便于持续扩展为多技能仓库。
+
+| 技能 | 说明 |
+|---|---|
+| [`testcase-generator/`](testcase-generator/) | 把 PRD / UI 设计图 / XMind 需求，结构化转成可直接执行的测试用例（10 列 Excel 主产物） |
+
+更新日志见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
 # testcase-generator · 测试用例生成技能
 
 > WorkBuddy 技能：把 PRD / UI 设计图 / XMind 需求，结构化地转成可直接执行的测试用例（10 列 Excel 主产物）。

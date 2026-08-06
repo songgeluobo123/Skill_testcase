@@ -1,3 +1,15 @@
+# Skills · WorkBuddy Skill Collection
+
+This repository is a **collection** of WorkBuddy skills. Each skill lives in its own same-named subdirectory so the repo can grow into a multi-skill collection.
+
+| Skill | Description |
+|---|---|
+| [`testcase-generator/`](testcase-generator/) | Turns a PRD / UI design image / XMind requirements into executable test cases (10-column Excel as the main artifact) |
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+---
+
 # testcase-generator · Test Case Generation Skill
 
 > A WorkBuddy skill that turns a PRD / UI design image / XMind requirements into executable test cases (10-column Excel as the main artifact).

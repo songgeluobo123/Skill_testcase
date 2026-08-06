@@ -1,0 +1,26 @@
+# Changelog
+
+本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
+
+## [1.0.0] - 2026-08-06
+
+首个公开版本，包含 `testcase-generator` 技能。
+
+### 新增
+- **`testcase-generator` 技能**：把 PRD / UI 设计图 / XMind 需求，结构化转成可直接执行的测试用例。
+  - **10 列 Excel 主产物**：用例编号 / 测试模块 / 用例名称 / 优先级 / 测试类型 / 前置条件 / 测试步骤 / 预期结果 / 适用阶段 / 设计方法
+  - **6 步工作流**：需求深度分析 → 功能点分解 → 测试点分析 → 模板确认 → 用例设计 → 用例输出
+  - **6 种黑盒测试方法**：等价类划分、边界值分析、场景法、状态迁移法、判定表法、正交分析法
+  - **质量预审闸门**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比，不达标不出库
+  - **质量评分**：覆盖 / 准确 / 可执行 / 优先级 4 维评分，低于阈值自动回退
+  - **多源输入**：PRD 文本、UI 截图（多模态读图）、XMind 解析
+  - **多格式输出**：Excel、XMind、Markdown 测试报告 / 测试点
+  - **记忆机制**：跨会话复用历史产品约束
+- **仓库级文件**：`README.md`（集合索引）、`README.en.md`、`LICENSE`（MIT）、`CHANGELOG.md`、`.gitignore`
+
+### 说明
+- **仓库结构**：每个技能独立存放在同名子目录（如 `testcase-generator/`），根目录仅放集合级文件，便于扩展为多技能集合。
+- **Release `v1.0`** 附带打包产物 `testcase-generator.zip`（技能源码快照，不含 `.git`）。
+- **本地安装路径**：WorkBuddy 用户级技能目录为 `~/.workbuddy/skills/testcase-generator/`（扁平结构，即本仓库 `testcase-generator/` 子目录的内容），克隆后把该子目录复制到技能目录即可使用。
+
+[1.0.0]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0
