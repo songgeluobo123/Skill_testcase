@@ -24,6 +24,8 @@
 
 - **`testcase-generator` 技能结构重构（去重与分层）**：将 `case_fields.md` 四字段规范合并进 `case_design.md`（后者成为用例编写规范唯一权威来源），删除冗余 `case_fields.md`；`data_rules.md` 移除重复的优先级模型与评分 rubric（分别收敛至 `case_design.md` / `priority_p0_p3.md` / `quality_standards.md`）；`workflow.md` 由 6 步复述改为质量保障机制总览；`output_format.md` / `testpoint_checklist.md` 去除与 `case_design.md` 重复的规则、改为引用。明确控制面 / 编写规范 / 方法论 / 优先级 / 数据规则 / 质量保障 六层职责边界（单一真相源）。
 
+- **移除 P1-P4 优先级体系，统一为 P0-P3 四级**：删除 `case_design.md` 中的 P1-P4 分级表与 P0->P1 归一映射；`priority_p0_p3.md` 定为优先级分级唯一权威（移除与 P1-P4 的映射章节）。`output_format.md` / `SKILL.md` / `data_rules.md` / `quality_prescreen.md` / `quality_standards.md` / `README(.en)` 同步改为 P0-P3；脚本 `to_excel.py` / `to_xmind.py` / `prescreen.py` / `score_testcases.py` 移除 P0->P1 归一逻辑与 P4 校验集合，改为仅接受 P0-P3，且预审最高优先级闸门由 P1 调整为 P0（`--p0-min`/`--p0-max`）。
+
 ## [1.0.0] - 2026-08-06
 
 首个公开版本，包含 `testcase-generator` 技能。

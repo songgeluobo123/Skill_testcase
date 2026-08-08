@@ -21,14 +21,11 @@ import sys
 import uuid
 import zipfile
 
-VALID_LABELS = {"P1", "P2", "P3", "P4"}
+VALID_LABELS = {"P0", "P1", "P2", "P3"}
 
 
 def norm_priority(p):
-    p = (p or "").strip().upper()
-    if p == "P0":
-        return "P1"
-    return p
+    return (p or "").strip().upper()
 
 
 def load_cases(path):

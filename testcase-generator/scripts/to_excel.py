@@ -11,7 +11,7 @@ to_excel.py — 将结构化测试用例 JSON 转换为 Excel（Step 6 主产物
   python to_excel.py --emit-template "模板.xlsx"        # 仅生成空白模板（含表头与示例行）
 
 输入 JSON 字段（每条用例）：
-  module, name(可选), priority(P1-P4), precondition, steps, expected,
+  module, name(可选), priority(P0-P3), precondition, steps, expected,
   test_data(可选), coverage_rule(可选), design_method(可选, 列表或字符串),
   test_type(可选, 测试类型), stage(可选, 适用阶段), id(可选, 作为用例编号)
 
@@ -30,7 +30,7 @@ except ImportError:
     sys.exit(2)
 
 COLUMNS = ["用例编号", "测试模块", "用例名称", "优先级", "测试类型", "前置条件", "测试步骤", "预期结果", "适用阶段", "设计方法"]
-PRIORITY_SET = {"P1", "P2", "P3", "P4"}
+PRIORITY_SET = {"P0", "P1", "P2", "P3"}
 
 
 def load_cases(path):
@@ -44,10 +44,7 @@ def load_cases(path):
 
 
 def normalize_priority(p):
-    p = (p or "").strip().upper()
-    if p == "P0":
-        return "P1"  # 旧方案 P0 归一为 P1
-    return p
+    return (p or "").strip().upper()
 
 
 def dm_to_str(dm):
@@ -138,7 +135,7 @@ def main():
 
     bad = [c.get("id", "?") for c in cases if normalize_priority(c.get("priority")) not in PRIORITY_SET]
     if bad:
-        print(f"[警告] 以下用例优先级非法（应为 P1-P4）: {bad[:10]}", file=sys.stderr)
+        print(f"[警告] 以下用例优先级非法（应为 P0-P3）: {bad[:10]}", file=sys.stderr)
 
     wb = build_workbook(cases)
     wb.save(args.output)

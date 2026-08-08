@@ -18,7 +18,7 @@ English version: [README.en.md](README.en.md)
 
 - 📥 **多源输入**：PRD（`.md`/`.txt`）、UI 截图（多模态读图）、XMind（`.xmind` 解析）
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
-- 🎯 **优先级模型**：P1–P4 与 P0–P3 双口径（安全攸关场景自动上调 P1 占比）
+- 🎯 **优先级模型**：P0–P3 四级（统一口径，安全攸关场景自动上调 P0 占比）
 - 🛡️ **质量预审闸门**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比，不达标不出库
 - 🧠 **记忆机制**：记录历史产品约束，跨会话复用
 - 📤 **多格式输出**：Excel（9→10 列）、XMind、Markdown 测试报告 / 测试点
@@ -66,11 +66,11 @@ testcase-generator/
 | **控制面** | `SKILL.md` | 6 步工作流编排 + 资源索引；不存放具体规范细节 |
 | **B. 用例编写规范** | `case_design.md`（权威）、`naming_rules.md`、`output_format.md`、`xmind_output.md` | 定义"用例怎么写"：字段写法、命名红线、Excel/XMind 容器 |
 | **A. 方法论** | `function_points.md`、`test_methods.md`、`testpoint_checklist.md`、`multimodal.md` | 定义"如何设计"（拆解 / 方法 / 测试点 / 读图） |
-| **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（P1–P4 口径内置于 `case_design.md`） |
+| **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（优先级唯一权威来源） |
 | **D. 数据规则** | `data_rules.md` | 仅测试数据校验映射库 |
 | **E. 质量保障** | `quality_standards.md`、`quality_prescreen.md`、`workflow.md`、`memory_mechanism.md` | 定义"怎么验"：标准/评分、预审闸门、机制总览、记忆 |
 
-> **边界原则：每条规则只在一处定义（单一真相源）。** `case_design.md` 为用例编写规范唯一权威；优先级模型只存于 `case_design.md`(P1–P4) 与 `priority_p0_p3.md`(P0–P3)；评分 rubric 只在 `quality_standards.md`；数据校验只在 `data_rules.md`。交叉处一律用"见 xxx"引用，不复制规则。
+> **边界原则：每条规则只在一处定义（单一真相源）。** `case_design.md` 为用例编写规范唯一权威；优先级模型只存于 `priority_p0_p3.md`(P0–P3，唯一权威)；评分 rubric 只在 `quality_standards.md`；数据校验只在 `data_rules.md`。交叉处一律用"见 xxx"引用，不复制规则。
 
 ## 四、6 步工作流
 
@@ -90,7 +90,7 @@ testcase-generator/
 | 1 | 用例编号 | 自动生成 `TC-001`…（用例 JSON 含 `id` 时优先用 `id`） |
 | 2 | 测试模块 | `module` |
 | 3 | 用例名称 | `name` |
-| 4 | 优先级 | `priority`，P1–P4 |
+| 4 | 优先级 | `priority`，P0–P3 |
 | 5 | 测试类型 | `test_type`（功能/异常/边界/接口/兼容/性能…） |
 | 6 | 前置条件 | `precondition` |
 | 7 | 测试步骤 | `steps` |

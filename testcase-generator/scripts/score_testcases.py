@@ -61,14 +61,11 @@ DEFAULT_DATA_RULES = {
     },
 }
 
-PRIORITIES = {"P1", "P2", "P3", "P4"}
+PRIORITIES = {"P0", "P1", "P2", "P3"}
 
 
 def norm_priority(p):
-    p = (p or "").strip().upper()
-    if p == "P0":
-        return "P1"
-    return p
+    return (p or "").strip().upper()
 WEIGHTS = {"coverage": 0.30, "accuracy": 0.25, "executability": 0.25, "priority": 0.20}
 
 
@@ -173,7 +170,7 @@ def score_case(case, rules):
     pri = norm_priority(case.get("priority"))
     priority_score = 100 if pri in PRIORITIES else 0
     if pri not in PRIORITIES:
-        issues.append(f"priority='{case.get('priority')}' 非法，需为 P1/P2/P3/P4（旧 P0 已归一为 P1）")
+        issues.append(f"priority='{case.get('priority')}' 非法，需为 P0/P1/P2/P3")
 
     total = (
         WEIGHTS["coverage"] * coverage

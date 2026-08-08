@@ -5,7 +5,7 @@ prescreen.py — 测试用例质量预审器（正式生成前的 6 项闸门）
 
 检查项（详见 references/quality_prescreen.md）：
   1. 需求覆盖率 >= coverage_min（需 --requirement-rules 提供需求规则清单）
-  2. P1 占比（最高优先级）在 [p1_min, p1_max]（安全攸关软件上调）
+  2. P0 占比（最高优先级）在 [p0_min, p0_max]（安全攸关软件上调）
   3. P2 占比在 [p2_min, p2_max]
   4. 每条用例关联至少 1 种测试设计方法（design_method 非空且合法，6 方法之一或多）
   5. 无凭空编造（coverage_rule 必须落在需求规则清单内）
@@ -18,10 +18,10 @@ prescreen.py — 测试用例质量预审器（正式生成前的 6 项闸门）
 
 用法：
   python prescreen.py cases.json --requirement-rules requirements.json
-  python prescreen.py cases.json --p1-min 0.40 --p1-max 0.60
+  python prescreen.py cases.json --p0-min 0.40 --p0-max 0.60
   python prescreen.py cases.json            # 仅做 2/3/4/6 检查
 
-优先级采用 P1-P4（P1 最高）；旧方案 P0 在统计时自动归一为 P1。
+优先级采用 P0-P3（P0 最高，一票否决）；全技能统一，无 P4。
 """
 
 import argparse
@@ -30,14 +30,11 @@ import re
 import sys
 
 DESIGN_METHODS = {"等价类划分", "边界值分析", "场景法", "状态迁移法", "判定表法", "正交分析法", "错误推测"}
-PRIORITIES = {"P1", "P2", "P3", "P4"}
+PRIORITIES = {"P0", "P1", "P2", "P3"}
 
 
 def norm_priority(p):
-    p = (p or "").strip().upper()
-    if p == "P0":
-        return "P1"
-    return p
+    return (p or "").strip().upper()
 
 
 def load_cases(path):
@@ -59,8 +56,8 @@ def main():
     ap.add_argument("input", help="用例 JSON 文件路径")
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON（字符串数组）")
     ap.add_argument("--coverage-min", type=float, default=0.95)
-    ap.add_argument("--p1-min", type=float, default=0.10)
-    ap.add_argument("--p1-max", type=float, default=0.15)
+    ap.add_argument("--p0-min", type=float, default=0.10)
+    ap.add_argument("--p0-max", type=float, default=0.15)
     ap.add_argument("--p2-min", type=float, default=0.30)
     ap.add_argument("--p2-max", type=float, default=0.40)
     args = ap.parse_args()
@@ -113,15 +110,15 @@ def main():
         print(f"[!] 未提供需求规则清单，跳过真实覆盖率计算；用例规则关联率 {linked/total:.0%}（仅供参考）")
         warns.append("未提供 --requirement-rules，覆盖率检查跳过")
 
-    # 2/3. 优先级占比（P0 归一为 P1）
+    # 2/3. 优先级占比
     cnt = {p: sum(1 for c in cases if norm_priority(c.get("priority")) == p)
            for p in PRIORITIES}
-    p1r = cnt["P1"] / total
+    p0r = cnt["P0"] / total
     p2r = cnt["P2"] / total
-    if not (args.p1_min <= p1r <= args.p1_max):
-        fails.append(f"P1 占比 {p1r:.0%} 不在 [{args.p1_min:.0%},{args.p1_max:.0%}]（当前 {cnt['P1']} 条）")
+    if not (args.p0_min <= p0r <= args.p0_max):
+        fails.append(f"P0 占比 {p0r:.0%} 不在 [{args.p0_min:.0%},{args.p0_max:.0%}]（当前 {cnt['P0']} 条）")
     else:
-        print(f"[✓] P1 占比 {p1r:.0%}（{cnt['P1']} 条）")
+        print(f"[✓] P0 占比 {p0r:.0%}（{cnt['P0']} 条）")
     if not (args.p2_min <= p2r <= args.p2_max):
         fails.append(f"P2 占比 {p2r:.0%} 不在 [{args.p2_min:.0%},{args.p2_max:.0%}]（当前 {cnt['P2']} 条）")
     else:

@@ -18,7 +18,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 
 - 📥 **Multi-source input**: PRD (`.md`/`.txt`), UI screenshots (multimodal), XMind (`.xmind` parsing)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
-- 🎯 **Priority model**: P1–P4 (safety-critical contexts auto-escalate P1 share)
+- 🎯 **Priority model**: P0–P3 (safety-critical contexts auto-escalate P0 share)
 - 🛡️ **Quality prescreen gate**: coverage / method linkage / no fabrication / no duplication / priority share — fails the gate, no release
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
@@ -66,11 +66,11 @@ testcase-generator/
 | **Control plane** | `SKILL.md` | 6-step orchestration + resource index; holds no detailed spec |
 | **B. Case authoring** | `case_design.md` (authority), `naming_rules.md`, `output_format.md`, `xmind_output.md` | Defines "how a case is written": field rules, naming red-lines, Excel/XMind containers |
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
-| **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (P1–P4 lives inside `case_design.md`) |
+| **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
 | **D. Data rules** | `data_rules.md` | Test-data validation mapping only |
 | **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, mechanism overview, memory |
 
-> **Boundary rule: each rule is defined exactly once (single source of truth).** `case_design.md` is the sole authority for case authoring; priority models live only in `case_design.md` (P1–P4) and `priority_p0_p3.md` (P0–P3); the scoring rubric lives only in `quality_standards.md`; data validation only in `data_rules.md`. Cross-references use "see xxx" instead of copying rules.
+> **Boundary rule: each rule is defined exactly once (single source of truth).** `case_design.md` is the sole authority for case authoring; the priority model lives only in `priority_p0_p3.md` (P0–P3, sole authority); the scoring rubric lives only in `quality_standards.md`; data validation only in `data_rules.md`. Cross-references use "see xxx" instead of copying rules.
 
 ## 4. 6-step workflow
 
@@ -90,7 +90,7 @@ testcase-generator/
 | 1 | Case ID | Auto `TC-001`… (uses `id` from JSON when present) |
 | 2 | Module | `module` |
 | 3 | Case Name | `name` |
-| 4 | Priority | `priority`, P1–P4 |
+| 4 | Priority | `priority`, P0–P3 |
 | 5 | Test Type | `test_type` (functional / exception / boundary / interface / compatibility / performance …) |
 | 6 | Precondition | `precondition` |
 | 7 | Steps | `steps` |
