@@ -2,7 +2,7 @@
 
 本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [Unreleased]
+## [1.0.1] - 2026-08-08
 
 ### 新增
 - **`testcase-generator` 测试用例评级策略（P0–P3）**：新增 `references/priority_p0_p3.md`，提供 P0–P3 四级优先级口径（与默认 P1–P4 并存）。
@@ -32,4 +32,5 @@
 - **Release `v1.0`** 附带打包产物 `testcase-generator.zip`（技能源码快照，不含 `.git`）。
 - **本地安装路径**：WorkBuddy 用户级技能目录为 `~/.workbuddy/skills/testcase-generator/`（扁平结构，即本仓库 `testcase-generator/` 子目录的内容），克隆后把该子目录复制到技能目录即可使用。
 
+[1.0.1]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.1
 [1.0.0]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0
