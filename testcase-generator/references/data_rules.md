@@ -1,7 +1,7 @@
 # 数据-规则映射库
 
 本文件为 testcase-generator 技能提供**测试数据校验规则库**。生成测试数据时优先遵守本文件中的规则；
-其余"硬约束"（优先级划分、质量评分）已分别收敛到 `case_design.md` 与 `quality_standards.md`，避免口径分散。
+其余"硬约束"（优先级划分、质量评分）已分别收敛到 `priority_p0_p3.md`（优先级口径）与 `quality_standards.md`（评分 rubric），避免口径分散。
 
 ---
 

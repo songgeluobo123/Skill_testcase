@@ -31,7 +31,7 @@
 python scripts/to_xmind.py cases.json -o E-Bike_测试用例.xmind --project "E-Bike 智能骑行"
 ```
 
-- 输入为 Stage 4 产出的结构化 `test_cases.json`（每条含 `module / priority / precondition / steps / test_data / expected / coverage_rule / design_method`）。
+- 输入为 Step 6 产出的结构化 `test_cases.json`（每条含 `module / priority / precondition / steps / test_data / expected / coverage_rule / design_method`）。
 - 输出 `.xmind` 可直接被 XMind 2020+ 打开。
 
 ## XMind 2020+ content.json 关键结构

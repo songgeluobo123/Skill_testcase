@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-extract_requirements.py — Stage 1 需求规则清单抽取器
+extract_requirements.py — Step 1 需求规则清单抽取器
 
 从 PRD 文档(.md/.txt，尽力支持 .docx)中抽取结构化「需求规则清单」，供
 prescreen.py 的覆盖率检查(第 1 项)与用例-规则映射(map_coverage.py)使用。
@@ -137,7 +137,7 @@ def merged_table_text(lines, s, e):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Stage 1 需求规则清单抽取器")
+    ap = argparse.ArgumentParser(description="Step 1 需求规则清单抽取器")
     ap.add_argument("prd", help="PRD 文件路径 (.md/.txt/.docx)")
     ap.add_argument("-o", "--out", default=".", help="输出目录 (默认当前目录)")
     ap.add_argument("--no-merge-tables", action="store_true",

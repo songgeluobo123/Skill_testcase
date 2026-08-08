@@ -48,7 +48,7 @@ python scripts/to_excel.py --emit-template "test-case-design/examples/testcases/
       "id": "TC-001",
       "module": "登录",
       "name": "正确密码登录",
-      "priority": "P1",
+      "priority": "P0",
       "test_type": "功能测试",
       "precondition": "1. 用户已注册\n2. 网络正常",
       "steps": "1. 在登录页输入已注册手机号\n2. 输入正确密码\n3. 点击登录按钮",

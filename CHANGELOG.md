@@ -26,6 +26,13 @@
 
 - **移除 P1-P4 优先级体系，统一为 P0-P3 四级**：删除 `case_design.md` 中的 P1-P4 分级表与 P0->P1 归一映射；`priority_p0_p3.md` 定为优先级分级唯一权威（移除与 P1-P4 的映射章节）。`output_format.md` / `SKILL.md` / `data_rules.md` / `quality_prescreen.md` / `quality_standards.md` / `README(.en)` 同步改为 P0-P3；脚本 `to_excel.py` / `to_xmind.py` / `prescreen.py` / `score_testcases.py` 移除 P0->P1 归一逻辑与 P4 校验集合，改为仅接受 P0-P3，且预审最高优先级闸门由 P1 调整为 P0（`--p0-min`/`--p0-max`）。
 
+
+### 修复
+- **`testcase-generator` 一致性检测修复（本地检测、本次补提交）**：全面检测技能全目录，修正一处致命脚本 bug 与多项口径 / 术语不一致。
+  - **致命 bug**：`quality_prescreen.md` 示例命令误用 `--p1-min/--p1-max`，但 `prescreen.py` 无此参数（仅接受 `--p0-min/--p0-max`、`--p2-min/--p2-max`），原命令会直接报错；已改为 `--p0-min 0.40 --p0-max 0.60` 并实测通过。
+  - **优先级口径对齐**：`priority_p0_p3.md`（唯一权威）规定 P2 占 35%~45%，但 `quality_prescreen.md` 与 `prescreen.py` 默认 30%~40%；已统一为 35%~45%（脚本默认 `p2_min`/`p2_max`=0.35/0.45）。
+  - **术语一致**：`workflow.md` / `quality_prescreen.md` "上调 P1 占比" → "上调 P0 占比"；`quality_prescreen.md` "Stage 2/4 出口"、`xmind_output.md` "Stage 4 产出"、`extract_requirements.py` / `memory_io.py` 注释"Stage 1/2/4/5" → 统一为六步工作流的 "Step"。
+  - **笔误 / 残留**：`test_methods.md` 删除残留"见 `quality_prescreen.md` 之前的实现"乱尾引用；`README.md` "Excel（9→10 列）" → "Excel（10 列）"；`README.en.md` "Stage1" → "Step1"；`data_rules.md` 优先级收敛指向由 `case_design.md` 改为 `priority_p0_p3.md`（真正权威源）；`output_format.md` 示例"正确密码登录"优先级 P1 → P0（符合 R4 核心冒烟）；`SKILL.md` 清理对不存在的 `scripts/testpoint_md.py` 的强制引用（保留可扩展说明）。
 ## [1.0.0] - 2026-08-06
 
 首个公开版本，包含 `testcase-generator` 技能。

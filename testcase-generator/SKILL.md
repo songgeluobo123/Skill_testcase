@@ -69,7 +69,7 @@ agent_created: true
 基于功能点清单，按 `references/testpoint_checklist.md` 的 5 维度 + 覆盖清单，逐功能点系统化产出**测试点**（描述"怎么测"，不含预期结果）。
 
 - **输出路径（强制）**：`test_output/{版本+需求名}/testpoint/{版本} 测试点.md`。
-- 调用 `scripts/testpoint_md.py`（若存在）或直接写 Markdown。
+- 直接写 Markdown（如需程序化生成可扩展 `scripts/testpoint_md.py`）。
 
 **本步输出**：Markdown 测试点文档。
 

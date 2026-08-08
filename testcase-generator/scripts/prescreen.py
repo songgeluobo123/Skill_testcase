@@ -58,8 +58,8 @@ def main():
     ap.add_argument("--coverage-min", type=float, default=0.95)
     ap.add_argument("--p0-min", type=float, default=0.10)
     ap.add_argument("--p0-max", type=float, default=0.15)
-    ap.add_argument("--p2-min", type=float, default=0.30)
-    ap.add_argument("--p2-max", type=float, default=0.40)
+    ap.add_argument("--p2-min", type=float, default=0.35)
+    ap.add_argument("--p2-max", type=float, default=0.45)
     args = ap.parse_args()
 
     try:

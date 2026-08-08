@@ -10,7 +10,7 @@ memory_io.py — 测试用例生成 Skill 的项目记忆读写器（越用越�
   init    创建记忆文件与四大类模板（若不存在）
   record  追加一条记忆。--category {ambiguity,endpoint,granularity,missed}
           --content "内容" [--date YYYY-MM-DD]
-  load    打印记忆文件全文（供 Agent 在 Stage 1/2/4/5 读取）
+  load    打印记忆文件全文（供 Agent 在 Step 1/2/4 读取、Step 6 回写）
   show    同 load
 
 用法：

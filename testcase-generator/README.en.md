@@ -48,7 +48,7 @@ testcase-generator/
 │   ├── workflow.md           # Quality-assurance overview (prescreen/score/memory gates + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
 └── scripts/                 # Executable scripts (9, Python 3.13)
-    ├── extract_requirements.py  # Stage1 extract requirement rule list
+    ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
     ├── prescreen.py             # Quality prescreen gate
     ├── score_testcases.py       # Quality scoring
