@@ -76,7 +76,7 @@ agent_created: true
 ### Step 4 — 测试用例模板确认
 
 1. 用 `references/output_format.md` 的 10 列 Excel 模板规范；若项目有历史模板，运行 `scripts/to_excel.py --emit-template 模板.xlsx` 生成并对照。
-2. **学习历史编写习惯**（见 `references/case_design.md`）：前置/步骤粒度、步骤数=预期数、命名 ≤20 字无前缀无【】、优先级 P1-P4 口径（若项目模板用 P0-P3，见 `references/priority_p0_p3.md` 双口径）。
+2. **学习历史编写习惯**（见 `references/case_design.md`）：前置/步骤粒度、步骤数=预期数、命名 ≤20 字无前缀无【】（详见 `references/naming_rules.md` 七条强制红线）、优先级 P1-P4 口径（若项目模板用 P0-P3，见 `references/priority_p0_p3.md` 双口径）。
 
 **本步输出**：模板规范（供 Step 5/6）。
 
@@ -125,6 +125,7 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `test_methods.md` — 6 种黑盒测试设计方法及有序叠加。
 - `testpoint_checklist.md` — 测试点 5 维度 + 列表/表单/导入导出/文件上传覆盖清单。
 - `case_design.md` — 10 条设计原则 + 命名/格式规范 + 不同测试类型转化要点表 + 优先级 P1-P4 / P0-P3 双口径。
+- `naming_rules.md` — 测试用例命名规则：目的与原则 + 7 条强制红线（长度 ≤20 字 / 无预期判定词 / 无序号前缀 / 无【】包裹 / 无冗余前缀 / 术语统一 / 无模糊量词）。命名评审必查。
 - `output_format.md` — Excel 10 列模板规范与字段定义。
 - `quality_standards.md` — 四核心质量标准（定义 + 反面案例 + 评审清单）。
 - `quality_prescreen.md` — 质量预审 6 项清单与阈值、两个检查点。
