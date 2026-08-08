@@ -1,0 +1,2 @@
+# 统一以 LF 作为仓库与检出行尾，消除 CRLF 转换警告
+* text=auto eol=lf
