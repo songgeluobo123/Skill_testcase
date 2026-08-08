@@ -2,6 +2,15 @@
 
 本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased]
+
+### 新增
+- **`testcase-generator` 测试用例评级策略（P0–P3）**：新增 `references/priority_p0_p3.md`，提供 P0–P3 四级优先级口径（与默认 P1–P4 并存）。
+  - 五维评分模型（业务重要性 / 用户影响 / 故障概率 / 修复成本 / 使用频率）定量定级
+  - 7 条硬规则决策表（命中即定级，高于评分）
+  - 与六类质量属性、设备 / 移动 / 手环三端映射，及分级 SOP 与维护升降级规则
+  - 同步更新 `SKILL.md`、`case_design.md`、`data_rules.md` 以引用统一评级口径
+
 ## [1.0.0] - 2026-08-06
 
 首个公开版本，包含 `testcase-generator` 技能。
