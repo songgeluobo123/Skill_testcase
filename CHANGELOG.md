@@ -22,6 +22,8 @@
   - 新增「生成时字段联动自检」链路，使四字段一致、不重不漏
   - 同步在 `SKILL.md` 的 references 索引、Step 4 编写习惯、Step 5 用例设计中引用该文件
 
+- **`testcase-generator` 技能结构重构（去重与分层）**：将 `case_fields.md` 四字段规范合并进 `case_design.md`（后者成为用例编写规范唯一权威来源），删除冗余 `case_fields.md`；`data_rules.md` 移除重复的优先级模型与评分 rubric（分别收敛至 `case_design.md` / `priority_p0_p3.md` / `quality_standards.md`）；`workflow.md` 由 6 步复述改为质量保障机制总览；`output_format.md` / `testpoint_checklist.md` 去除与 `case_design.md` 重复的规则、改为引用。明确控制面 / 编写规范 / 方法论 / 优先级 / 数据规则 / 质量保障 六层职责边界（单一真相源）。
+
 ## [1.0.0] - 2026-08-06
 
 首个公开版本，包含 `testcase-generator` 技能。

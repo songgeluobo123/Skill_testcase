@@ -17,7 +17,7 @@ agent_created: true
 |---|---|
 | **如何让 AI 理解功能需求？** | 需求资料规范化放在 `test_input/{版本+需求名}/prd/`；优先用 XMind 作为需求输入（`scripts/read_xmind.py` 读取需求树），PRD/MD 用 `scripts/extract_requirements.py` 抽取规则清单；图片/原型用 `scripts/read_ui_image.py` 多模态读图。 |
 | **如何让 AI 应用测试方法？** | 把测试方法**编码为可执行规则**：6 种黑盒方法（`references/test_methods.md`）+ 功能点分解（`references/function_points.md`）+ 测试点覆盖清单（`references/testpoint_checklist.md`）。 |
-| **如何保证输出格式统一？** | 精确格式模板 + 负向约束（`references/output_format.md` 10 列 Excel 模板（用例编号/测试模块/用例名称/优先级/测试类型/前置条件/测试步骤/预期结果 + 适用阶段/设计方法）、`references/case_design.md` 10 条设计原则 + 命名/格式规范）。 |
+| **如何保证输出格式统一？** | 精确格式模板 + 负向约束：列容器见 `references/output_format.md`（10 列 Excel）；内容写法见 `references/case_design.md`（四字段编写规范 + 10 条设计原则）；命名红线见 `references/naming_rules.md`；优先级口径 P1-P4 见 `case_design.md`、P0-P3 见 `priority_p0_p3.md`。 |
 
 ## 核心方法论（设计前先读）
 
@@ -76,13 +76,13 @@ agent_created: true
 ### Step 4 — 测试用例模板确认
 
 1. 用 `references/output_format.md` 的 10 列 Excel 模板规范；若项目有历史模板，运行 `scripts/to_excel.py --emit-template 模板.xlsx` 生成并对照。
-2. **学习历史编写习惯**（见 `references/case_design.md`）：前置/步骤粒度、步骤数=预期数、命名 ≤20 字无前缀无【】（详见 `references/naming_rules.md` 七条强制红线）、四字段编写规范（详见 `references/case_fields.md`）、优先级 P1-P4 口径（若项目模板用 P0-P3，见 `references/priority_p0_p3.md` 双口径）。
+2. **学习历史编写习惯**（见 `references/case_design.md`）：前置/步骤粒度、四字段编写规范（标题/前置/步骤/预期，见第二节）、步骤数=预期数、命名 ≤20 字无前缀无【】（详见 `references/naming_rules.md` 七条强制红线）、优先级 P1-P4 口径（若项目模板用 P0-P3，见 `references/priority_p0_p3.md` 双口径）。
 
 **本步输出**：模板规范（供 Step 5/6）。
 
 ### Step 5 — 测试用例设计（含质量预审闸门）
 
-基于模板，应用 `references/case_design.md` 的 10 条设计原则 + `references/case_fields.md` 的四字段编写规范（标题 / 前置条件 / 步骤 / 预期），把 Step 3 测试点转化为可执行用例：
+基于模板，应用 `references/case_design.md` 的 10 条设计原则 + 四字段编写规范（标题 / 前置条件 / 步骤 / 预期），把 Step 3 测试点转化为可执行用例：
 
 - 每条用例写 `priority`（P1-P4；若项目模板采用 P0-P3，按 `references/priority_p0_p3.md` 的 R1–R7 硬规则 + 五维评分定级，取值 P0/P1/P2/P3）、`design_method`（6 方法之一或多）、`module`、`precondition`、`steps`、`expected`、`test_data`、`coverage_rule`。
 - **质量预审闸门**：运行 `scripts/prescreen.py cases.json --requirement-rules requirement_rules.json`（见 `references/quality_prescreen.md`）。6 项不达标 → 自动修正后重跑；阈值按项目在**检查点①**确认（安全攸关软件上调 P1 占比）。
@@ -124,14 +124,13 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `function_points.md` — 功能点定义（功能点≠需求点）、6 类、分解原则。
 - `test_methods.md` — 6 种黑盒测试设计方法及有序叠加。
 - `testpoint_checklist.md` — 测试点 5 维度 + 列表/表单/导入导出/文件上传覆盖清单。
-- `case_design.md` — 10 条设计原则 + 命名/格式规范 + 不同测试类型转化要点表 + 优先级 P1-P4 / P0-P3 双口径。
-- `case_fields.md` — **四字段编写规范**：标题（三种写法 + 模块名结合）、前置条件（确定方法与场景）、测试步骤（线性、无连词、不含预期）、预期结果（检查点、至少 1 条）+ Step 5 字段联动自检。生成用例逐字段约束。
+- `case_design.md` — **用例编写规范唯一权威来源**：10 条设计原则 + 四字段编写规范（标题/前置条件/步骤/预期，已合并原 case_fields.md）+ 测试类型转化要点 + 优先级 P1-P4 / P0-P3 双口径 + 粒度学习要点。
 - `naming_rules.md` — 测试用例命名规则：目的与原则 + 7 条强制红线（长度 ≤20 字 / 无预期判定词 / 无序号前缀 / 无【】包裹 / 无冗余前缀 / 术语统一 / 无模糊量词）。命名评审必查。
 - `output_format.md` — Excel 10 列模板规范与字段定义。
-- `quality_standards.md` — 四核心质量标准（定义 + 反面案例 + 评审清单）。
+- `quality_standards.md` — 四核心质量标准 + 0–100 评分 rubric（定义 + 反面案例 + 评审清单 + 量化评分）。
 - `quality_prescreen.md` — 质量预审 6 项清单与阈值、两个检查点。
-- `workflow.md` — 6 步流程的完整质量保障机制说明。
-- `data_rules.md` — 数据-规则映射库 + 优先级 P1-P4 模型 + P0-P3 模型与归一规则 + 0–100 评分 rubric。
+- `workflow.md` — 质量保障机制总览：预审 / 评分 / 记忆三道闸门如何衔接 + 可选技术加速器（6 步流程细节见本 SKILL.md）。
+- `data_rules.md` — 数据-规则映射库（测试数据校验规则）；优先级模型见 `case_design.md` / `priority_p0_p3.md`，评分 rubric 见 `quality_standards.md`。
 - `priority_p0_p3.md` — **P0–P3 分级策略**（五维评分 D1–D5 + 硬规则 R1–R7 + 各级范围/执行/评审/示例 + 质量属性与分端映射 + 分级 SOP）。项目模板采用 P0–P3 时以本文件为准。
 - `multimodal.md` — 多模态读图：UI 图 / 流程图 / 规则表 → 用例的识别映射。
 - `memory_mechanism.md` — 记忆机制：记录内容与读取时机、文件格式。
