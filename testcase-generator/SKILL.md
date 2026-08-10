@@ -92,7 +92,7 @@ agent_created: true
 1. 把审阅通过的用例结构化到 `test_cases.json`。
 2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。
 3. **可选 XMind**：`scripts/to_xmind.py test_cases.json -o report.xmind --project <项目名>`。
-4. **质量评分**：`scripts/score_testcases.py test_cases.json`（<70 回退重生成）。
+4. **质量评分**：`scripts/score_testcases.py test_cases.json`（**每项维度均需 ≥90**，任一不足即回退重生成）。
 5. **记忆写入**：`scripts/memory_io.py record --root <项目根> --category <ambiguity|endpoint|granularity|missed> --content <...>`。
 
 **本步输出**：`.xlsx` 测试用例（主产物）+ 可选 `.xmind` + 评分报告。
@@ -143,5 +143,5 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `prescreen.py` — Step 5 质量预审闸门（6 项，P0/P2 阈值可配，支持 6 方法）。
 - `to_excel.py` — Step 6 用例 JSON → `.xlsx`（10 列），`--emit-template` 生成模板。
 - `to_xmind.py` — Step 6 用例 JSON → `.xmind`（可选输出）。
-- `score_testcases.py` — Step 6 结构化评分器（<70 触发回退）。
+- `score_testcases.py` — Step 6 结构化评分器（4 维逐项判定，任一维度 <90 触发回退）。
 - `memory_io.py` — 项目记忆读写器（init / record / load）。

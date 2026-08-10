@@ -22,7 +22,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 🛡️ **Quality prescreen gate**: coverage / method linkage / no fabrication / no duplication / priority share — fails the gate, no release
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
-- 📊 **Quality scoring**: 4 dimensions (coverage / accuracy / executability / priority); auto-rollback below threshold
+- 📊 **Quality scoring**: 4 dimensions (coverage / accuracy / executability / priority); each dimension must reach 90+, auto-rollback if any below
 
 ## 3. Directory structure & layering
 
@@ -119,7 +119,7 @@ python scripts/prescreen.py ./out/test_cases_mapped.json \
 # 5. export 10-column Excel
 python scripts/to_excel.py ./out/test_cases_final.json -o cases.xlsx
 
-# 6. quality scoring (<70 triggers rollback)
+# 6. quality scoring (each dimension must be ≥ 90, rollback if any below)
 python scripts/score_testcases.py ./out/test_cases_final.json
 ```
 

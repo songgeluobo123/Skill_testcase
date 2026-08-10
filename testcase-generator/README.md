@@ -22,7 +22,7 @@ English version: [README.en.md](README.en.md)
 - 🛡️ **质量预审闸门**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比，不达标不出库
 - 🧠 **记忆机制**：记录历史产品约束，跨会话复用
 - 📤 **多格式输出**：Excel（10 列）、XMind、Markdown 测试报告 / 测试点
-- 📊 **质量评分**：覆盖 / 准确 / 可执行 / 优先级 4 维评分，低于阈值自动回退
+- 📊 **质量评分**：覆盖 / 准确 / 可执行 / 优先级 4 维评分，每项均需达 90 分，任一不足自动回退
 
 ## 三、目录结构与分层
 
@@ -119,7 +119,7 @@ python scripts/prescreen.py ./out/test_cases_mapped.json \
 # 5. 导出 10 列 Excel
 python scripts/to_excel.py ./out/test_cases_final.json -o 测试用例.xlsx
 
-# 6. 质量评分（<70 自动回退）
+# 6. 质量评分（每项维度需 ≥90，任一不足自动回退）
 python scripts/score_testcases.py ./out/test_cases_final.json
 ```
 

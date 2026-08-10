@@ -5,7 +5,7 @@ score_testcases.py — 测试用例结构化质量评分器
 
 对生成的测试用例做首轮结构化自动评分，覆盖四维度：
   覆盖完整性(30%) + 准确性(25%) + 可执行性(25%) + 优先级合理性(20%)
-评分 0-100；低于阈值(默认 70)的用例会被标记并触发工作流回退重生成。
+评分 0-100；**每个维度均需 ≥ 阈值(默认 90)**，任一维度不足即标记并触发工作流回退重生成。
 
 输入格式(JSON)：
 {
@@ -25,13 +25,13 @@ score_testcases.py — 测试用例结构化质量评分器
 
 用法：
   python score_testcases.py cases.json
-  python score_testcases.py cases.json --threshold 70
+  python score_testcases.py cases.json --threshold 90
   python score_testcases.py cases.json --rules my_rules.json
   cat cases.json | python score_testcases.py -
 
 退出码：
-  0  —— 全部用例 >= 阈值（可交付）
-  1  —— 存在用例 < 阈值（需回退重生成）
+  0  —— 全部用例每个维度均 >= 阈值（可交付）
+  1  —— 存在用例任一维度 < 阈值（需回退重生成）
   2  —— 输入/参数错误
 """
 
@@ -196,7 +196,7 @@ def score_case(case, rules):
 def main():
     ap = argparse.ArgumentParser(description="测试用例结构化质量评分器")
     ap.add_argument("input", help="用例 JSON 文件路径，或 '-' 读取 stdin")
-    ap.add_argument("--threshold", type=float, default=70.0, help="合格阈值，默认 70")
+    ap.add_argument("--threshold", type=float, default=90.0, help="每个维度合格阈值，默认 90")
     ap.add_argument("--rules", help="可选：自定义数据-规则映射库 JSON 路径")
     args = ap.parse_args()
 
@@ -221,16 +221,23 @@ def main():
 
     results = [score_case(c, rules) for c in cases]
     avg = round(sum(r["score"] for r in results) / len(results), 1)
-    failed = [r for r in results if r["score"] < args.threshold]
+    def _case_failed(r):
+        return any(v < args.threshold for v in r["breakdown"].values())
+    failed = [r for r in results if _case_failed(r)]
 
-    print(f"=== 测试用例质量评分（阈值 {args.threshold}，平均 {avg}）===\n")
+    print(f"=== 测试用例质量评分（每项维度需 ≥ {args.threshold}，平均总分 {avg}）===\n")
     for r in results:
-        flag = "✗ 不通过" if r["score"] < args.threshold else "✓ 通过"
+        failed_case = any(v < args.threshold for v in r["breakdown"].values())
+        flag = "✗ 不通过" if failed_case else "✓ 通过"
         print(f"[{flag}] {r['id']}  总分 {r['score']}")
-        print(f"    分解: 覆盖 {r['breakdown']['coverage']} | "
-              f"准确 {r['breakdown']['accuracy']} | "
-              f"可执行 {r['breakdown']['executability']} | "
-              f"优先级 {r['breakdown']['priority']}")
+        bd = r["breakdown"]
+        dim_labels = {"coverage": "覆盖", "accuracy": "准确",
+                      "executability": "可执行", "priority": "优先级"}
+        parts = []
+        for dim in ("coverage", "accuracy", "executability", "priority"):
+            mark = " ⚠低于阈值" if bd[dim] < args.threshold else ""
+            parts.append(f"{dim_labels[dim]} {bd[dim]}{mark}")
+        print("    分解: " + " | ".join(parts))
         for it in r["issues"]:
             print(f"    - 问题: {it}")
         print()
