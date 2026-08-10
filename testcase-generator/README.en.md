@@ -18,11 +18,26 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 
 - 📥 **Multi-source input**: PRD (`.md`/`.txt`), UI screenshots (multimodal), XMind (`.xmind` parsing)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
-- 🎯 **Priority model**: P0–P3 (safety-critical contexts auto-escalate P0 share)
+- 🎯 **Priority model**: unified P0–P3 scale (no P4), P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
 - 🛡️ **Quality prescreen gate**: coverage / method linkage / no fabrication / no duplication / priority share — fails the gate, no release
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
 - 📊 **Quality scoring**: 4 dimensions (coverage / accuracy / executability / priority); each dimension must reach 90+, auto-rollback if any below
+
+### Priority model (P0–P3, unified scale)
+
+This skill uses a single **P0–P3** scale (**no P1–P4 system, no P4**); a case's `priority` may only be `P0` / `P1` / `P2` / `P3`. The grading basis (five-dimension scoring D1–D5 + hard rules R1–R7 + grading SOP) is defined solely in `references/priority_p0_p3.md` (the single source of truth); the table below is only an overview.
+
+| Level | Scope | Execution requirement | Suggested share |
+|---|---|---|---|
+| **P0** 🔴 | Core flow / smoke / safety & compliance / data correctness (release-blocking) | Run every build; 100% pass required to release | 10%~15% |
+| **P1** 🟠 | Important features / high-frequency scenarios / mainstream compatibility | Covered in every main test round (SIT / regression core) | 25%~35% |
+| **P2** 🔵 | General features / secondary scenarios / low-frequency compatibility | Covered in normal iterations; optional in regression | 35%~45% |
+| **P3** ⚪ | Edge cases / extreme boundaries / exploratory | Covered in full rounds or on demand; not a release gate | 10%~20% |
+
+**Execution order (coverage grows with priority)**: smoke = P0 → main test SIT = P0+P1 → regression = P0+P1+sampled P2 → full / exploratory = P0~P3.
+
+> Shares are enforced by `scripts/prescreen.py` (P0 default 10%~15%, P2 default 35%~45%); any out-of-range share triggers a re-prioritization rollback. Safety-critical projects can raise the P0 share at **checkpoint ①** (e.g. 40%~60%, see `references/quality_prescreen.md`); the memory mechanism reuses that preference across sessions.
 
 ## 3. Directory structure & layering
 

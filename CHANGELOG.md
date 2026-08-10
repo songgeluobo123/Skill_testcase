@@ -7,6 +7,15 @@
   - `references/case_design.md`：删除与权威五维评分模型（D1–D5 + R1–R7 硬规则）不一致的“业务影响度 × 用户频率”二因子映射，改指向 `priority_p0_p3.md` 为唯一定级口径。
   - 校验：全仓库 grep 确认无残留“自动上调 / auto-escalate”与二因子映射；`scripts/prescreen.py` 实证 `PRIORITIES = {P0,P1,P2,P3}`，与文档一致。
 
+## [1.0.3] - 2026-08-10
+
+### 修改
+
+- **`testcase-generator` 优先级文档修正（README 为主）** — 以 `references/priority_p0_p3.md`（P0–P3 四级、无 P4，优先级分级唯一权威来源）为准，统一全技能优先级表述与执行顺序：
+  - `README.md` / `README.en.md`：特性条目去除“安全攸关场景自动上调 P0 占比 / auto-escalate P0 share”的错误表述（实为检查点①手动确认的阈值）；新增「优先级模型 / Priority model（P0–P3 四级）」小节，含各级范围 / 执行要求 / 占比建议（P0 10–15%、P1 25–35%、P2 35–45%、P3 10–20%）与执行顺序（冒烟 = P0 → 主测试 SIT = P0+P1 → 回归 = P0+P1+抽样P2 → 全量/探索 = P0~P3）。
+  - `references/case_design.md`：删除与权威五维评分模型（D1–D5 + R1–R7 硬规则）不一致的“业务影响度 × 用户频率”二因子映射，改指向 `priority_p0_p3.md` 为唯一定级口径。
+  - 校验：全仓库 grep 确认无残留“自动上调 / auto-escalate”与二因子映射；`scripts/prescreen.py` 实证 `PRIORITIES = {P0,P1,P2,P3}`，与文档一致。
+
 # Changelog
 
 本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
@@ -78,3 +87,5 @@
 [1.0.2]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.2
 [1.0.1]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.1
 [1.0.0]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0
+
+[1.0.3]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.3
