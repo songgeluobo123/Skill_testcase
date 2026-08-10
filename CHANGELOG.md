@@ -33,6 +33,18 @@
   - **优先级口径对齐**：`priority_p0_p3.md`（唯一权威）规定 P2 占 35%~45%，但 `quality_prescreen.md` 与 `prescreen.py` 默认 30%~40%；已统一为 35%~45%（脚本默认 `p2_min`/`p2_max`=0.35/0.45）。
   - **术语一致**：`workflow.md` / `quality_prescreen.md` "上调 P1 占比" → "上调 P0 占比"；`quality_prescreen.md` "Stage 2/4 出口"、`xmind_output.md` "Stage 4 产出"、`extract_requirements.py` / `memory_io.py` 注释"Stage 1/2/4/5" → 统一为六步工作流的 "Step"。
   - **笔误 / 残留**：`test_methods.md` 删除残留"见 `quality_prescreen.md` 之前的实现"乱尾引用；`README.md` "Excel（9→10 列）" → "Excel（10 列）"；`README.en.md` "Stage1" → "Step1"；`data_rules.md` 优先级收敛指向由 `case_design.md` 改为 `priority_p0_p3.md`（真正权威源）；`output_format.md` 示例"正确密码登录"优先级 P1 → P0（符合 R4 核心冒烟）；`SKILL.md` 清理对不存在的 `scripts/testpoint_md.py` 的强制引用（保留可扩展说明）。
+
+## [1.0.2] - 2026-08-10
+
+### 修改
+- **`testcase-generator` 质量评分规则：每项维度均需 ≥90**：将合格判定口径由"总分过线"收紧为"每个质量维度均须 ≥ 阈值（默认 90）"，任一维度不足即判定不通过并回退重生成。
+  - `scripts/score_testcases.py`：合格判定由"总分 < --threshold 不通过"改为"任一维度 breakdown < --threshold 即不通过"；`--threshold` 默认值 70→90，语义变为"每个维度合格阈值"；输出增加维度低于阈值的 `⚠低于阈值` 标注；退出码 0/1 语义同步为"每维是否达标"。
+  - `references/quality_standards.md`：评级动作由"≥70 通过 / <70 不通过"改为"每个维度均 ≥90 通过 / 任一维度 <90 不通过"。
+  - `SKILL.md` / `README.md` / `README.en.md`：同步"每项维度需 ≥90，任一不足回退"说明，抹掉残留的"<70 触发回退"旧表述。
+
+### 维护
+- **统一仓库行尾为 LF**（提交 `48433c9`）：新增 `.gitattributes`（`* text=auto eol=lf`），消除 Windows 下 CRLF 转换警告，仓库内文件统一以 LF 存储。
+
 ## [1.0.0] - 2026-08-06
 
 首个公开版本，包含 `testcase-generator` 技能。
@@ -54,5 +66,6 @@
 - **Release `v1.0`** 附带打包产物 `testcase-generator.zip`（技能源码快照，不含 `.git`）。
 - **本地安装路径**：WorkBuddy 用户级技能目录为 `~/.workbuddy/skills/testcase-generator/`（扁平结构，即本仓库 `testcase-generator/` 子目录的内容），克隆后把该子目录复制到技能目录即可使用。
 
+[1.0.2]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.2
 [1.0.1]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.1
 [1.0.0]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0
