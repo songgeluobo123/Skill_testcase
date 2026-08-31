@@ -30,10 +30,10 @@ This skill uses a single **P0–P3** scale (**no P1–P4 system, no P4**); a cas
 
 | Level | Scope | Execution requirement | Suggested share |
 |---|---|---|---|
-| **P0** 🔴 | Core flow / smoke / safety & compliance / data correctness (release-blocking) | Run every build; 100% pass required to release | 10%~15% |
-| **P1** 🟠 | Important features / high-frequency scenarios / mainstream compatibility | Covered in every main test round (SIT / regression core) | 25%~35% |
-| **P2** 🔵 | General features / secondary scenarios / low-frequency compatibility | Covered in normal iterations; optional in regression | 35%~45% |
-| **P3** ⚪ | Edge cases / extreme boundaries / exploratory | Covered in full rounds or on demand; not a release gate | 10%~20% |
+| **P0** 🔴 | Feasibility/concept testing: landscape main-flow features, portrait-to-landscape functional equivalence, cross-end integration (release-blocking) | Run every build; 100% pass required to release | 10%~15% |
+| **P1** 🟠 | Main-flow must-test: step-by-step main-flow features (per landscape UI flowchart), equivalence classes incl. exception scenarios, landscape layout & adaptation, AI data accuracy, device monitoring sensitivity, data security | Covered in every main test round (SIT / regression core) | 25%~35% |
+| **P2** 🔵 | Display completeness: landscape UI renders completely; basic features not on the main flow (controls not occluded or overflowing) | Covered in normal iterations; optional in regression | 35%~45% |
+| **P3** ⚪ | Aesthetics & compatibility: UI correctness and layout aesthetics, post-rotation layout, landscape responsiveness, Android/iOS version compatibility, certification-standard performance | Covered in full rounds or on demand; not a release gate | 10%~20% |
 
 **Execution order (coverage grows with priority)**: smoke = P0 → main test SIT = P0+P1 → regression = P0+P1+sampled P2 → full / exploratory = P0~P3.
 

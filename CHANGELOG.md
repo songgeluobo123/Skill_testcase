@@ -1,3 +1,15 @@
+## [1.0.4] - 2026-08-31
+
+### 修改
+
+- **`testcase-generator` 测试分级标准重定义（P0–P3 横屏版口径）** — 以 `references/priority_p0_p3.md`（优先级分级唯一权威来源）为准，按横屏版产品重新定义四级语义并全技能同步：
+  - P0（可行性/概念性测试）：横屏版主流程功能（用户基本使用流程、横屏主界面与关键交互）、竖屏功能移植横屏后的等价可用性、各端联调测试。
+  - P1（主流程必测）：按主流程步骤逐步拆解的必须执行功能（依据横屏 UI 流程图）、等价类相关功能（含异常执行场景）、横屏布局与适配、AI 数据准确性、设备监控灵敏度、数据安全。
+  - P2（显示完整性）：横屏界面 UI 显示完整性、不影响主流程的基本功能（控件不遮挡、不溢出）。
+  - P3（美观与兼容）：UI 显示正确性与布局美观（文字/Logo/图片/按钮/链接、旋转后布局）、横屏响应式、Android 与 iOS 版本兼容、产品认证标准性能测试。
+  - `priority_p0_p3.md`：分级总览、硬规则决策表（R1–R7 全部改写）、各级详细定义、质量属性映射、各端映射、评分示例、速查卡全部对齐新口径；保留"唯一权威来源、无 P4、五维评分 D1–D5、占比建议、执行轮次、分级 SOP"框架不变。
+  - `README.md` / `README.en.md` / `references/case_design.md` / `references/quality_prescreen.md`：分级总览表与口径描述同步更新。
+
 ## [1.0.3] - 2026-08-10
 
 ### 修改
@@ -89,3 +101,5 @@
 [1.0.0]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0
 
 [1.0.3]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.3
+
+[1.0.4]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.4
