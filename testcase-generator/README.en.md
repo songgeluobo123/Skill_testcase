@@ -18,7 +18,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 
 - 📥 **Multi-source input**: PRD (`.md`/`.txt`), UI screenshots (multimodal), XMind (`.xmind` parsing)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
-- 🎯 **Priority model**: unified P0–P3 scale (no P4), P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
+- 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
 - 🛡️ **Quality prescreen gate**: coverage / method linkage / no fabrication / no duplication / priority share — fails the gate, no release
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points

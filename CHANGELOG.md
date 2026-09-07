@@ -1,3 +1,9 @@
+## [1.0.5] - 2026-09-07
+
+### 修改
+
+- **`testcase-generator` 分级口径收口（控制面补全四级名称）**：`SKILL.md` 资源索引与四核心质量标准「优先级合理」条目、`README.md` / `README.en.md` 特性条目补充四级语义名称（P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容），与 `references/priority_p0_p3.md` 新口径一致；未新增规则，仅让控制面可见分级语义。
+
 ## [1.0.4] - 2026-08-31
 
 ### 修改
@@ -103,3 +109,5 @@
 [1.0.3]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.3
 
 [1.0.4]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.4
+
+[1.0.5]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.5

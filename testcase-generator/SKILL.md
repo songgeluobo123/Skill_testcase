@@ -102,7 +102,7 @@ agent_created: true
 - **覆盖完整性** — 覆盖所有需求点（显性 + 隐性）、业务规则、异常场景。
 - **准确性** — 步骤与预期结果符合业务逻辑，无矛盾。
 - **可执行性** — 步骤清晰无歧义，前置条件完整，测试数据有效。
-- **优先级合理** — 核心场景（高业务影响）优先，无冗余。
+- **优先级合理** — 按 P0 可行性/概念性测试 → P1 主流程必测 → P2 显示完整性 → P3 美观与兼容 定级；主流程与必测项不被显示/美观类用例挤占，无冗余。
 定义与反面案例见 `references/quality_standards.md`。
 
 ## 触发条件
@@ -118,6 +118,46 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - **主产物**：`.xlsx`（10 列，打开即测试用例，详见 `references/output_format.md`）。
 - **辅产物**：测试点 Markdown、可选 `.xmind`、结构化 `test_cases.json`、质量评分报告。
 
+## 门禁排障速查（踩坑记录）
+
+跑 `prescreen.py` / `score_testcases.py` 反复失败时，先按本节自查，可省数轮返工。
+
+**1. `prescreen.py` 报 `[错误] 读取需求规则清单失败: '/dev/fd/63'`**
+- 原因：用 Bash 进程替换 `--requirement-rules <(echo '[...]')` 传参，Python 读不到 fd。
+- 解法：**先写临时 JSON 文件再传路径**。
+  ```bash
+  python -c "import json;json.dump([r['id'] for r in json.load(open('test_cases.json'))['rules']],open('_rules_ids.json','w'))"
+  python prescreen.py test_cases.json --requirement-rules _rules_ids.json
+  ```
+- `--requirement-rules` 只需规则 ID 数组（`["R-001", ...]`），不必是完整规则对象。
+
+**2. `coverage_rule` 为空导致 score 全 0 分**
+- 生成脚本若靠函数名/标题关键词自动推断，极易漏配。循环 `for` 生成的用例（如 6 个状态徽标）用正则按 ID 批量注入也会漏。
+- 解法：**在 `_case()` 调用里显式写 `coverage_rule="R-009"`**，不要依赖推断；循环体内直接把 `coverage_rule` 作为常量传参。
+
+**3. 优先级分布卡闸门（P0∈[10%,15%]、P2∈[35%,45%]）**
+- 调分布时**先算总量再定条数**，改一条就重跑一次，别批量改完再验（容易来回震荡：P0 降完 P2 又超）。
+- 建议顺序：先杀 P0（保留核心业务流 + 安全相关）→ 再看 P2（不足就从 P1 拉，超出就退回 P1）→ P3 留 1 条即可。
+
+**4. 批量改优先级时 Python 正则对中文匹配失败**
+- 现象：`re.search(rf'{cid}, "[^"]+",\s*"P0"', src)` 对中文标题返回 `None`；即使 `rf'TC-AC-L-008", "[\u4e00-\u9fa5]+", "P0"'` 也失败，只有 `.*?` lazy 模式能匹配。
+- 解法：**改用行级替换，别跟正则较劲**。
+  ```python
+  lines = src.split('\n')
+  for i, line in enumerate(lines):
+      if cid in line and '"P0"' in line:
+          lines[i] = line.replace('"P0"', '"P1"', 1)
+  src = '\n'.join(lines)
+  ```
+
+**5. score 报「步骤含'点击按钮'但未说明位置，存在歧义」（可执行性扣 20 分）**
+- 判据：`"点击" in steps and "按钮" in steps and not ("导航"/"页面"/"右侧"/"左侧" in steps)`。
+- 坑：写「点击**右下角**语音按钮」不算过——「右下角」不含「右侧」。
+- 解法：统一写成「**页面**右下角的 XX 按钮」或「**页面**右侧的 XX 按钮」，命中「页面」最稳。
+
+**6. 改生成脚本后必须重跑生成**
+- 任何优先级 / 步骤 / coverage_rule 的修改都要落到**生成脚本**再重跑，禁止只手改 `test_cases.json` 或只改 Excel，否则下次重生成会回滚。
+
 ## Resources
 
 ### references/
@@ -131,7 +171,7 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `quality_prescreen.md` — 质量预审 6 项清单与阈值、两个检查点。
 - `workflow.md` — 质量保障机制总览：预审 / 评分 / 记忆三道闸门如何衔接 + 可选技术加速器（6 步流程细节见本 SKILL.md）。
 - `data_rules.md` — 数据-规则映射库（测试数据校验规则）；优先级模型见 `case_design.md` / `priority_p0_p3.md`，评分 rubric 见 `quality_standards.md`。
-- `priority_p0_p3.md` — **P0–P3 分级策略**（优先级分级的唯一权威来源）：五维评分 D1–D5 + 硬规则 R1–R7 + 各级范围/执行/评审/示例 + 质量属性与分端映射 + 分级 SOP。全技能统一采用 P0–P3 四级。
+- `priority_p0_p3.md` — **P0–P3 分级策略**（优先级分级的唯一权威来源）：P0 可行性/概念性测试（横屏主流程 + 竖屏移植等价 + 各端联调）→ P1 主流程必测（横屏 UI 流程图拆解 / 等价类含异常 / 横屏布局适配 / AI 数据准确性 / 设备监控灵敏度 / 数据安全）→ P2 显示完整性 → P3 美观与兼容（旋转布局 / 响应式 / Android·iOS 兼容 / 认证性能）；含五维评分 D1–D5 + 硬规则 R1–R7 + 各级范围/执行/评审/示例 + 质量属性与分端映射 + 分级 SOP。全技能统一采用 P0–P3 四级（无 P4）。
 - `multimodal.md` — 多模态读图：UI 图 / 流程图 / 规则表 → 用例的识别映射。
 - `memory_mechanism.md` — 记忆机制：记录内容与读取时机、文件格式。
 
