@@ -1,3 +1,10 @@
+## [1.0.6] - 2026-09-07
+
+### 修改
+
+- **分级口径残留修正**：`SKILL.md`「门禁排障速查 → 3. 优先级分布卡闸门」中“先杀 P0（保留核心业务流 + 安全相关）”改为“保留横屏主流程 + 竖屏移植等价 + 各端联调”，消除与新口径（数据安全属 P1）的冲突。
+- 同步补推此前仅在本地的「门禁排障速查（踩坑记录）」章节（6 条：进程替换传参失败、coverage_rule 空导致 0 分、分布卡闸门、中文正则失效、点击歧义扣分、必须重跑生成脚本）。
+
 ## [1.0.5] - 2026-09-07
 
 ### 修改
@@ -111,3 +118,5 @@
 [1.0.4]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.4
 
 [1.0.5]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.5
+
+[1.0.6]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.6
