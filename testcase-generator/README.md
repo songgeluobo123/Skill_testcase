@@ -19,7 +19,8 @@ English version: [README.en.md](README.en.md)
 - 📥 **多源输入**：PRD（`.md`/`.txt`）、UI 截图（多模态读图）、XMind（`.xmind` 解析）
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
-- 🛡️ **质量预审闸门**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比，不达标不出库
+- 🛡️ **质量预审闸门（8 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与残缺，不达标不出库
+- 📐 **实证写法模式**：从真实优秀用例库（1278 条）反推的 10 个可复制做法——双前置列分离、动词白名单、预期断言化、同构组批量产出、非功能三件套等（见 `references/excellent_case_patterns.md`）
 - 🧠 **记忆机制**：记录历史产品约束，跨会话复用
 - 📤 **多格式输出**：Excel（10 列）、XMind、Markdown 测试报告 / 测试点
 - 📊 **质量评分**：覆盖 / 准确 / 可执行 / 优先级 4 维评分，每项均需达 90 分，任一不足自动回退
@@ -47,7 +48,7 @@ testcase-generator/
 ├── README.md                # 中文总览（本文件）
 ├── README.en.md             # 英文总览
 ├── LICENSE                  # MIT
-├── references/              # 方法论与规范（14 篇，按下列分层组织，物理上同目录）
+├── references/              # 方法论与规范（15 篇，按下列分层组织，物理上同目录）
 │   ├── case_design.md        # ★用例编写规范唯一权威：设计原则 + 四字段规范 + 类型转化 + 优先级口径 + 粒度
 │   ├── naming_rules.md       # 命名 7 条强制红线
 │   ├── output_format.md      # 10 列 Excel 容器定义 + JSON 字段映射
@@ -56,10 +57,11 @@ testcase-generator/
 │   ├── test_methods.md       # 6 种黑盒方法详解 + 有序叠加
 │   ├── testpoint_checklist.md# 测试点 5 维度 + 常见功能覆盖清单
 │   ├── multimodal.md         # 多模态读图（图→用例）
+│   ├── excellent_case_patterns.md # ★优秀用例实证模式（10 做法 + 自检清单 + 反面清单）
 │   ├── priority_p0_p3.md     # P0–P3 分级策略（优先级口径）
 │   ├── data_rules.md         # 数据-规则映射库（测试数据校验）
 │   ├── quality_standards.md  # 4 大质量标准 + 0–100 评分 rubric
-│   ├── quality_prescreen.md  # 质量预审 6 项闸门与阈值
+│   ├── quality_prescreen.md  # 质量预审 8 项闸门与阈值
 │   ├── workflow.md           # 质量保障机制总览（预审/评分/记忆三道闸门 + 技术加速器）
 │   └── memory_mechanism.md   # 记忆机制
 └── scripts/                 # 可执行脚本（9 个，Python 3.13）
@@ -79,7 +81,7 @@ testcase-generator/
 | 层 | 文件 | 职责边界 |
 |---|---|---|
 | **控制面** | `SKILL.md` | 6 步工作流编排 + 资源索引；不存放具体规范细节 |
-| **B. 用例编写规范** | `case_design.md`（权威）、`naming_rules.md`、`output_format.md`、`xmind_output.md` | 定义"用例怎么写"：字段写法、命名红线、Excel/XMind 容器 |
+| **B. 用例编写规范** | `case_design.md`（权威）、`naming_rules.md`、`output_format.md`、`xmind_output.md`、`excellent_case_patterns.md`（经验证据层） | 定义"用例怎么写"：字段写法、命名红线、Excel/XMind 容器、优秀范式与反面清单 |
 | **A. 方法论** | `function_points.md`、`test_methods.md`、`testpoint_checklist.md`、`multimodal.md` | 定义"如何设计"（拆解 / 方法 / 测试点 / 读图） |
 | **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（优先级唯一权威来源） |
 | **D. 数据规则** | `data_rules.md` | 仅测试数据校验映射库 |
@@ -131,8 +133,8 @@ python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o 
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 
-# 5. 导出 10 列 Excel
-python scripts/to_excel.py ./out/test_cases_final.json -o 测试用例.xlsx
+# 5. 导出 10 列 Excel（需"测试环境/前置条件"分列时加 --with-environment 出 11 列）
+python scripts/to_excel.py ./out/test_cases_final.json -o 测试用例.xlsx [--with-environment]
 
 # 6. 质量评分（每项维度需 ≥90，任一不足自动回退）
 python scripts/score_testcases.py ./out/test_cases_final.json

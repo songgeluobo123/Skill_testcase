@@ -85,12 +85,13 @@ agent_created: true
 基于模板，应用 `references/case_design.md` 的 10 条设计原则 + 四字段编写规范（标题 / 前置条件 / 步骤 / 预期），把 Step 3 测试点转化为可执行用例：
 
 - 每条用例写 `priority`（P0–P3 四级之一，定级规则见 `references/priority_p0_p3.md` 的五维评分 + R1–R7 硬规则）、`design_method`（6 方法之一或多）、`module`、`precondition`、`steps`、`expected`、`test_data`、`coverage_rule`。
-- **质量预审闸门**：运行 `scripts/prescreen.py cases.json --requirement-rules requirement_rules.json`（见 `references/quality_prescreen.md`）。6 项不达标 → 自动修正后重跑；阈值按项目在**检查点①**确认（安全攸关软件上调 P0 占比）。
+- **写法强制要求**（实证模式，完整见 `references/excellent_case_patterns.md`，生成时逐条比对）：① 双前置列分离——`测试环境` 写可整块复用的编号式环境清单，`前置条件` 写本条界面/状态；② 步骤以动词白名单开头（点击/输入/勾选/查验/进入/设置/选择/关闭/上传/下载/对比/记录），按钮名与界面名写具体；③ 预期一律"应…"或数值断言，UI 给元素清单、文案给逐字内容、数据给具体值，**禁止**"合理/美观/流畅/友好/正常显示"等不可判定词；④ 每个等价类 / 边界值 / 权限矩阵 / 多入口 / 多模式测试点**成组输出 ≥3 条**同构用例；⑤ 非功能用例走"场景化前置 + 量化预期 + 统计表引用"三件套；⑥ 版本/端/机型标签列分布均衡，多语言用例预期带差异要求。
+- **质量预审闸门**：运行 `scripts/prescreen.py cases.json --requirement-rules requirement_rules.json`（见 `references/quality_prescreen.md`）。8 项不达标 → 自动修正后重跑；阈值按项目在**检查点①**确认（安全攸关软件上调 P0 占比）。
 
 ### Step 6 — 测试用例输出
 
 1. 把审阅通过的用例结构化到 `test_cases.json`。
-2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。
+2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。项目要求"环境准备 / 界面状态"分列时加 `--with-environment` 输出 11 列（双前置列，见 `excellent_case_patterns.md` 做法 1）。
 3. **可选 XMind**：`scripts/to_xmind.py test_cases.json -o report.xmind --project <项目名>`。
 4. **质量评分**：`scripts/score_testcases.py test_cases.json`（**每项维度均需 ≥90**，任一不足即回退重生成）。
 5. **记忆写入**：`scripts/memory_io.py record --root <项目根> --category <ambiguity|endpoint|granularity|missed> --content <...>`。
@@ -158,6 +159,10 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 **6. 改生成脚本后必须重跑生成**
 - 任何优先级 / 步骤 / coverage_rule 的修改都要落到**生成脚本**再重跑，禁止只手改 `test_cases.json` 或只改 Excel，否则下次重生成会回滚。
 
+**7. 预审新增的第 7/8 项（预期可判定 / 标题规范）批量报错**
+- 第 7 项：预期里写了 `合理/美观/友好/流畅/良好/正常显示/工整/尽量/适当/无异常` 等不可判定词 → 改成"应…"断言 + 具体值 / 清单 / 逐字文案；主观类必须补判定基线。
+- 第 8 项：标题 >20 字、带 `1、` 序号前缀、含【】或句末标点、`steps` 为空、标题含 `（待XX更新）` 类占位 → 逐条改写；同模块标题重名只是告警，但必须靠唯一用例编号区分。
+
 ## Resources
 
 ### references/
@@ -168,11 +173,12 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `naming_rules.md` — 测试用例命名规则：目的与原则 + 7 条强制红线（长度 ≤20 字 / 无预期判定词 / 无序号前缀 / 无【】包裹 / 无冗余前缀 / 术语统一 / 无模糊量词）。命名评审必查。
 - `output_format.md` — Excel 10 列模板规范与字段定义。
 - `quality_standards.md` — 四核心质量标准 + 0–100 评分 rubric（定义 + 反面案例 + 评审清单 + 量化评分）。
-- `quality_prescreen.md` — 质量预审 6 项清单与阈值、两个检查点。
+- `quality_prescreen.md` — 质量预审 8 项清单与阈值、两个检查点。
 - `workflow.md` — 质量保障机制总览：预审 / 评分 / 记忆三道闸门如何衔接 + 可选技术加速器（6 步流程细节见本 SKILL.md）。
 - `data_rules.md` — 数据-规则映射库（测试数据校验规则）；优先级模型见 `case_design.md` / `priority_p0_p3.md`，评分 rubric 见 `quality_standards.md`。
 - `priority_p0_p3.md` — **P0–P3 分级策略**（优先级分级的唯一权威来源）：P0 可行性/概念性测试（横屏主流程 + 竖屏移植等价 + 各端联调）→ P1 主流程必测（横屏 UI 流程图拆解 / 等价类含异常 / 横屏布局适配 / AI 数据准确性 / 设备监控灵敏度 / 数据安全）→ P2 显示完整性 → P3 美观与兼容（旋转布局 / 响应式 / Android·iOS 兼容 / 认证性能）；含五维评分 D1–D5 + 硬规则 R1–R7 + 各级范围/执行/评审/示例 + 质量属性与分端映射 + 分级 SOP。全技能统一采用 P0–P3 四级（无 P4）。
 - `multimodal.md` — 多模态读图：UI 图 / 流程图 / 规则表 → 用例的识别映射。
+- `excellent_case_patterns.md` — **优秀用例的实证模式**（经验证据层）：从真实优秀用例库（1278 条）反推的 10 个可复制做法 + 生成后自检清单 + 反面清单速查。支撑预审第 7/8 项与 case_design 第六节。
 - `memory_mechanism.md` — 记忆机制：记录内容与读取时机、文件格式。
 
 ### scripts/
@@ -180,7 +186,7 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `extract_requirements.py` — Step 1 从 PRD/MD 抽取需求规则清单（默认表格合并到需求陈述级，`--no-merge-tables` 可对照）。
 - `read_ui_image.py` — Step 1 多模态读图骨架生成器（校验图片、输出元素抽取 JSON）。
 - `map_coverage.py` — 用例 → 需求规则 ID 映射器，输出覆盖率与未覆盖规则。
-- `prescreen.py` — Step 5 质量预审闸门（6 项，P0/P2 阈值可配，支持 6 方法）。
+- `prescreen.py` — Step 5 质量预审闸门（8 项：覆盖率 / P0 / P2 占比 / 方法关联 / 无编造 / 无重复 / 预期可判定 / 标题规范与残缺；P0、P2 阈值可配，支持 6 方法）。
 - `to_excel.py` — Step 6 用例 JSON → `.xlsx`（10 列），`--emit-template` 生成模板。
 - `to_xmind.py` — Step 6 用例 JSON → `.xmind`（可选输出）。
 - `score_testcases.py` — Step 6 结构化评分器（4 维逐项判定，任一维度 <90 触发回退）。

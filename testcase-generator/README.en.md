@@ -19,7 +19,8 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 📥 **Multi-source input**: PRD (`.md`/`.txt`), UI screenshots (multimodal), XMind (`.xmind` parsing)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
-- 🛡️ **Quality prescreen gate**: coverage / method linkage / no fabrication / no duplication / priority share — fails the gate, no release
+- 🛡️ **Quality prescreen gate (8 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & completeness — fails the gate, no release
+- 📐 **Evidence-based writing patterns**: 10 reproducible practices reverse-engineered from a real high-quality case library (1,278 cases) — split environment/precondition columns, verb whitelist, assertion-style expected results, isomorphic groups, non-functional triad (see `references/excellent_case_patterns.md`)
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
 - 📊 **Quality scoring**: 4 dimensions (coverage / accuracy / executability / priority); each dimension must reach 90+, auto-rollback if any below
@@ -47,7 +48,7 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (14 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (15 files; organized by layer below, physically flat)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
 │   ├── naming_rules.md       # 7 hard naming red-lines
 │   ├── output_format.md      # 10-column Excel container definition + JSON field mapping
@@ -56,10 +57,11 @@ testcase-generator/
 │   ├── test_methods.md       # 6 black-box methods explained + ordered stacking
 │   ├── testpoint_checklist.md# Test-point 5-dimension checklist + coverage list
 │   ├── multimodal.md         # Multimodal UI reading (image → cases)
+│   ├── excellent_case_patterns.md # ★ evidence-based patterns (10 practices + self-check + anti-patterns)
 │   ├── priority_p0_p3.md     # P0–P3 grading strategy (priority)
 │   ├── data_rules.md         # Data-rule mapping library (test-data validation)
 │   ├── quality_standards.md  # 4 quality standards + 0–100 scoring rubric
-│   ├── quality_prescreen.md  # Quality prescreen 6 gates & thresholds
+│   ├── quality_prescreen.md  # Quality prescreen 8 gates & thresholds
 │   ├── workflow.md           # Quality-assurance overview (prescreen/score/memory gates + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
 └── scripts/                 # Executable scripts (9, Python 3.13)
@@ -79,7 +81,7 @@ testcase-generator/
 | Layer | Files | Boundary |
 |---|---|---|
 | **Control plane** | `SKILL.md` | 6-step orchestration + resource index; holds no detailed spec |
-| **B. Case authoring** | `case_design.md` (authority), `naming_rules.md`, `output_format.md`, `xmind_output.md` | Defines "how a case is written": field rules, naming red-lines, Excel/XMind containers |
+| **B. Case authoring** | `case_design.md` (authority), `naming_rules.md`, `output_format.md`, `xmind_output.md`, `excellent_case_patterns.md` (evidence layer) | Defines "how a case is written": field rules, naming red-lines, Excel/XMind containers, proven patterns & anti-patterns |
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
 | **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
 | **D. Data rules** | `data_rules.md` | Test-data validation mapping only |

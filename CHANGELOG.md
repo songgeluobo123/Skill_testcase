@@ -1,3 +1,26 @@
+# Changelog
+
+本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
+
+## [1.1.0] - 2026-09-17
+
+### 新增
+
+- **`references/excellent_case_patterns.md`（优秀用例实证模式）** — 从一份真实优秀用例库（EQI 智能出行，1278 条，跨 APP / 嵌入式固件 / 联调功能 / 系统后台 4 个技术域）逐行统计反推出的可复制做法，作为技能的经验证据层：
+  - 10 个可复制做法：双前置列分离（测试环境 53 个模板值覆盖 1271 条）、步骤动词白名单、预期"应…"断言化（83%）与 UI 清单/数值/逐字文案三形态、同构组批量产出（等价类/边界/权限矩阵/多入口/多模式 ≥3 条）、标题句式、非功能"场景化前置 + 量化预期 + 数据外置"三件套、维度标签均衡、行内缺陷闭环、优先级纪律、生成即体检。
+  - 生成后自检清单（9 项）+ 反面清单速查（不可判定预期、条件堆进标题、实际结果填执行困难、无唯一 ID 致重名、维度列大面为空、占位残留入库、枚举顺序不统一、前置条件碎片化）。
+
+### 修改
+
+- **`scripts/prescreen.py`：预审由 6 项扩至 8 项** — 新增第 7 项「预期结果可判定」（不可判定词 `合理/美观/友好/流畅/良好/正常显示/工整/尽量/适当/无异常` 一票否决、预期为空即阻断、缺断言标志仅告警）与第 8 项「标题规范与残缺」（≤20 字 / 无序号前缀 / 无【】 / 无句末标点；`steps` 为空阻断；占位残留 `（待XX更新）/TBD/XXX` 阻断；同模块重名仅告警）。已用正反两组样例回归：规范样例零误伤，反例逐条命中。
+- **`scripts/to_excel.py`：新增 `--with-environment`** — 导出 11 列变体，在「前置条件」前插入「测试环境」列实现"双前置列"；默认仍为 10 列，模板导出同样支持该开关。
+- `references/case_design.md` — 原则 10 增加"禁止不可判定词"硬约束；「二、四 预期结果」补充可判定的三种写法；新增「六、优秀用例的实证模式（生成时强制引用）」6 条。
+- `references/quality_prescreen.md` — 检查清单由 6 项更新为 8 项（含第 7/8 项规则与处理方式）。
+- `references/output_format.md` — 新增「可选 11 列变体：双前置列（--with-environment）」章节与两列语义边界。
+- `references/workflow.md` — 预审闸门描述同步为 8 项。
+- `SKILL.md` — Step 5 增加 6 条写法强制要求（双前置列/动词白名单/预期断言化/同构组/非功能三件套/维度均衡）；Step 6 导出命令补充 `--with-environment`；资源索引新增 `excellent_case_patterns.md`；门禁排障速查新增第 7 条（第 7/8 项批量报错的处理）。
+- `README.md` / `README.en.md` — 特性条目、目录结构（references 14→15 篇）、分层职责表同步。
+
 ## [1.0.6] - 2026-09-07
 
 ### 修改
@@ -32,18 +55,16 @@
   - `references/case_design.md`：删除与权威五维评分模型（D1–D5 + R1–R7 硬规则）不一致的“业务影响度 × 用户频率”二因子映射，改指向 `priority_p0_p3.md` 为唯一定级口径。
   - 校验：全仓库 grep 确认无残留“自动上调 / auto-escalate”与二因子映射；`scripts/prescreen.py` 实证 `PRIORITIES = {P0,P1,P2,P3}`，与文档一致。
 
-## [1.0.3] - 2026-08-10
+## [1.0.2] - 2026-08-10
 
 ### 修改
+- **`testcase-generator` 质量评分规则：每项维度均需 ≥90**：将合格判定口径由"总分过线"收紧为"每个质量维度均须 ≥ 阈值（默认 90）"，任一维度不足即判定不通过并回退重生成。
+  - `scripts/score_testcases.py`：合格判定由"总分 < --threshold 不通过"改为"任一维度 breakdown < --threshold 即不通过"；`--threshold` 默认值 70→90，语义变为"每个维度合格阈值"；输出增加维度低于阈值的 `⚠低于阈值` 标注；退出码 0/1 语义同步为"每维是否达标"。
+  - `references/quality_standards.md`：评级动作由"≥70 通过 / <70 不通过"改为"每个维度均 ≥90 通过 / 任一维度 <90 不通过"。
+  - `SKILL.md` / `README.md` / `README.en.md`：同步"每项维度需 ≥90，任一不足回退"说明，抹掉残留的"<70 触发回退"旧表述。
 
-- **`testcase-generator` 优先级文档修正（README 为主）** — 以 `references/priority_p0_p3.md`（P0–P3 四级、无 P4，优先级分级唯一权威来源）为准，统一全技能优先级表述与执行顺序：
-  - `README.md` / `README.en.md`：特性条目去除“安全攸关场景自动上调 P0 占比 / auto-escalate P0 share”的错误表述（实为检查点①手动确认的阈值）；新增「优先级模型 / Priority model（P0–P3 四级）」小节，含各级范围 / 执行要求 / 占比建议（P0 10–15%、P1 25–35%、P2 35–45%、P3 10–20%）与执行顺序（冒烟 = P0 → 主测试 SIT = P0+P1 → 回归 = P0+P1+抽样P2 → 全量/探索 = P0~P3）。
-  - `references/case_design.md`：删除与权威五维评分模型（D1–D5 + R1–R7 硬规则）不一致的“业务影响度 × 用户频率”二因子映射，改指向 `priority_p0_p3.md` 为唯一定级口径。
-  - 校验：全仓库 grep 确认无残留“自动上调 / auto-escalate”与二因子映射；`scripts/prescreen.py` 实证 `PRIORITIES = {P0,P1,P2,P3}`，与文档一致。
-
-# Changelog
-
-本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
+### 维护
+- **统一仓库行尾为 LF**（提交 `48433c9`）：新增 `.gitattributes`（`* text=auto eol=lf`），消除 Windows 下 CRLF 转换警告，仓库内文件统一以 LF 存储。
 
 ## [1.0.1] - 2026-08-08
 
@@ -77,17 +98,6 @@
   - **术语一致**：`workflow.md` / `quality_prescreen.md` "上调 P1 占比" → "上调 P0 占比"；`quality_prescreen.md` "Stage 2/4 出口"、`xmind_output.md` "Stage 4 产出"、`extract_requirements.py` / `memory_io.py` 注释"Stage 1/2/4/5" → 统一为六步工作流的 "Step"。
   - **笔误 / 残留**：`test_methods.md` 删除残留"见 `quality_prescreen.md` 之前的实现"乱尾引用；`README.md` "Excel（9→10 列）" → "Excel（10 列）"；`README.en.md` "Stage1" → "Step1"；`data_rules.md` 优先级收敛指向由 `case_design.md` 改为 `priority_p0_p3.md`（真正权威源）；`output_format.md` 示例"正确密码登录"优先级 P1 → P0（符合 R4 核心冒烟）；`SKILL.md` 清理对不存在的 `scripts/testpoint_md.py` 的强制引用（保留可扩展说明）。
 
-## [1.0.2] - 2026-08-10
-
-### 修改
-- **`testcase-generator` 质量评分规则：每项维度均需 ≥90**：将合格判定口径由"总分过线"收紧为"每个质量维度均须 ≥ 阈值（默认 90）"，任一维度不足即判定不通过并回退重生成。
-  - `scripts/score_testcases.py`：合格判定由"总分 < --threshold 不通过"改为"任一维度 breakdown < --threshold 即不通过"；`--threshold` 默认值 70→90，语义变为"每个维度合格阈值"；输出增加维度低于阈值的 `⚠低于阈值` 标注；退出码 0/1 语义同步为"每维是否达标"。
-  - `references/quality_standards.md`：评级动作由"≥70 通过 / <70 不通过"改为"每个维度均 ≥90 通过 / 任一维度 <90 不通过"。
-  - `SKILL.md` / `README.md` / `README.en.md`：同步"每项维度需 ≥90，任一不足回退"说明，抹掉残留的"<70 触发回退"旧表述。
-
-### 维护
-- **统一仓库行尾为 LF**（提交 `48433c9`）：新增 `.gitattributes`（`* text=auto eol=lf`），消除 Windows 下 CRLF 转换警告，仓库内文件统一以 LF 存储。
-
 ## [1.0.0] - 2026-08-06
 
 首个公开版本，包含 `testcase-generator` 技能。
@@ -109,14 +119,12 @@
 - **Release `v1.0`** 附带打包产物 `testcase-generator.zip`（技能源码快照，不含 `.git`）。
 - **本地安装路径**：WorkBuddy 用户级技能目录为 `~/.workbuddy/skills/testcase-generator/`（扁平结构，即本仓库 `testcase-generator/` 子目录的内容），克隆后把该子目录复制到技能目录即可使用。
 
-[1.0.2]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.2
-[1.0.1]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.1
-[1.0.0]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0
-
-[1.0.3]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.3
-
-[1.0.4]: https://github.com/songgeluobo123/Skills/releases/tag/v1.0.4
-
-[1.0.5]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.5
-
 [1.0.6]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.6
+[1.0.5]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.5
+[1.0.4]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.4
+[1.0.3]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.3
+[1.0.2]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.2
+[1.0.1]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.1
+[1.0.0]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.0.0
+
+[1.1.0]: https://github.com/songgeluobo123/Skill_testcase/releases/tag/v1.1.0

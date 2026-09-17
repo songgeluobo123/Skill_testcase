@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-prescreen.py — 测试用例质量预审器（正式生成前的 6 项闸门）
+prescreen.py — 测试用例质量预审器（正式生成前的 8 项闸门）
 
 检查项（详见 references/quality_prescreen.md）：
   1. 需求覆盖率 >= coverage_min（需 --requirement-rules 提供需求规则清单）
@@ -10,6 +10,9 @@ prescreen.py — 测试用例质量预审器（正式生成前的 6 项闸门）
   4. 每条用例关联至少 1 种测试设计方法（design_method 非空且合法，6 方法之一或多）
   5. 无凭空编造（coverage_rule 必须落在需求规则清单内）
   6. 无语义重复（同 module+steps+expected 去重）
+  7. 预期结果可判定（无"合理/美观/流畅"类不可判定词；缺断言标志仅告警）
+  8. 标题规范与残缺检查（≤20 字 / 无编号前缀 / 无【】 / 无句末标点 / 无占位残留；
+     缺标题或缺步骤即阻断；重名标题仅告警）
 
 退出码：
   0  —— 全部通过（或仅警告）
@@ -19,9 +22,10 @@ prescreen.py — 测试用例质量预审器（正式生成前的 6 项闸门）
 用法：
   python prescreen.py cases.json --requirement-rules requirements.json
   python prescreen.py cases.json --p0-min 0.40 --p0-max 0.60
-  python prescreen.py cases.json            # 仅做 2/3/4/6 检查
+  python prescreen.py cases.json            # 仅做 2/3/4/6/7/8 检查
 
 优先级采用 P0-P3（P0 最高，一票否决）；全技能统一，无 P4。
+可判定性与标题检查的实证依据见 references/excellent_case_patterns.md。
 """
 
 import argparse
@@ -31,6 +35,17 @@ import sys
 
 DESIGN_METHODS = {"等价类划分", "边界值分析", "场景法", "状态迁移法", "判定表法", "正交分析法", "错误推测"}
 PRIORITIES = {"P0", "P1", "P2", "P3"}
+
+# 检查 7：不可判定词（见到即改，见 excellent_case_patterns.md 三、反面清单）
+UNJUDGEABLE_WORDS = [
+    "合理", "美观", "友好", "流畅", "良好", "正常显示", "显示正常", "工整", "整齐",
+    "尽量", "适当", "无异常", "不卡顿", "体验好", "清晰明了", "符合预期", "正确无误",
+]
+# 检查 7：可判定标志（应/必须/需/数值/阈值/逐字文案/清单编号）
+ASSERT_MARKERS = re.compile(r"应|必须|需|为[:：]|=\s*\d|>\s*\d|<\s*\d|\d|1[.、]|提示|显示为|保持")
+# 检查 8：标题占位残留
+TITLE_PLACEHOLDER = re.compile(r"待.{0,6}更新|TBD|TODO|XXX+|xxxx|【】|\[\]", re.IGNORECASE)
+
 
 
 def norm_priority(p):
@@ -52,7 +67,7 @@ def norm(s):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="测试用例质量预审器（6 项闸门）")
+    ap = argparse.ArgumentParser(description="测试用例质量预审器（8 项闸门）")
     ap.add_argument("input", help="用例 JSON 文件路径")
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON（字符串数组）")
     ap.add_argument("--coverage-min", type=float, default=0.95)
@@ -161,6 +176,63 @@ def main():
         fails.append(f"存在 {len(dups)} 组语义重复用例: {dups[:5]}")
     else:
         print(f"[✓] 无语义重复用例")
+
+    # 7. 预期结果可判定（不可判定词一票否决；缺断言标志仅告警）
+    vague, no_marker = [], []
+    for c in cases:
+        exp = str(c.get("expected", "") or "")
+        if not exp.strip():
+            vague.append((c.get("id", "?"), "预期为空"))
+            continue
+        hit = [w for w in UNJUDGEABLE_WORDS if w in exp]
+        if hit:
+            vague.append((c.get("id", "?"), "/".join(hit[:3])))
+        elif not ASSERT_MARKERS.search(exp):
+            no_marker.append(c.get("id", "?"))
+    if vague:
+        fails.append(f"{len(vague)} 条用例预期结果不可判定（命中不可判定词或为空）: {vague[:10]}")
+    else:
+        print(f"[✓] 全部 {total} 条用例预期结果可判定")
+    if no_marker:
+        warns.append(f"{len(no_marker)} 条用例预期缺少断言标志（应/数值/逐字文案/清单编号），建议改写: {no_marker[:10]}")
+
+    # 8. 标题规范与残缺检查
+    bad_title, no_steps, placeholder = [], [], []
+    title_map = {}
+    for c in cases:
+        cid = c.get("id", "?")
+        t = str(c.get("title", "") or "").strip()
+        if not t:
+            bad_title.append((cid, "标题为空"))
+        else:
+            reason = None
+            if len(t) > 20:
+                reason = f"超长 {len(t)} 字"
+            elif re.match(r"^\s*\d+\s*[、.．]", t):
+                reason = "含序号前缀"
+            elif "【" in t or "】" in t:
+                reason = "含【】标记"
+            elif re.search(r"[，。；！？,;!?]\s*$", t):
+                reason = "含句末标点"
+            if reason:
+                bad_title.append((cid, reason))
+            if TITLE_PLACEHOLDER.search(t):
+                placeholder.append((cid, t))
+            title_map.setdefault((c.get("module", ""), norm(t)), []).append(cid)
+        if not str(c.get("steps", "") or "").strip():
+            no_steps.append(cid)
+
+    if bad_title:
+        fails.append(f"{len(bad_title)} 条用例标题不合规（≤20 字 / 无序号前缀 / 无【】 / 无句末标点）: {bad_title[:10]}")
+    else:
+        print(f"[✓] 全部 {total} 条用例标题合规")
+    if no_steps:
+        fails.append(f"{len(no_steps)} 条用例缺失测试步骤（残缺条目不得入库）: {no_steps[:10]}")
+    if placeholder:
+        fails.append(f"{len(placeholder)} 条用例标题含占位残留（待XX更新/TBD/XXX）: {placeholder[:5]}")
+    dup_titles = [(k[1], v) for k, v in title_map.items() if len(v) > 1]
+    if dup_titles:
+        warns.append(f"{len(dup_titles)} 组同模块标题重名，须靠唯一用例编号区分: {dup_titles[:5]}")
 
     print()
     if fails:
