@@ -18,6 +18,7 @@ agent_created: true
 | **如何让 AI 理解功能需求？** | 需求资料规范化放在 `test_input/{版本+需求名}/prd/`；优先用 XMind 作为需求输入（`scripts/read_xmind.py` 读取需求树），PRD/MD 用 `scripts/extract_requirements.py` 抽取规则清单；图片/原型用 `scripts/read_ui_image.py` 多模态读图。 |
 | **如何让 AI 应用测试方法？** | 把测试方法**编码为可执行规则**：6 种黑盒方法（`references/test_methods.md`）+ 功能点分解（`references/function_points.md`）+ 测试点覆盖清单（`references/testpoint_checklist.md`）。 |
 | **如何保证输出格式统一？** | 精确格式模板 + 负向约束：列容器见 `references/output_format.md`（10 列 Excel）；内容写法见 `references/case_design.md`（四字段编写规范 + 10 条设计原则）；命名红线见 `references/naming_rules.md`；优先级口径（P0–P3 四级）见 `priority_p0_p3.md`。 |
+| **如何证明"没漏测"？** | 正向靠预审的全局覆盖率（≥95%），**模块级下钻**靠 `references/coverage_audit.md` + `scripts/coverage_audit.py`——输出模块覆盖率与三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖），专治"全局 95% 掩盖某模块 40%"。 |
 
 ## 核心方法论（设计前先读）
 
@@ -75,6 +76,7 @@ agent_created: true
 
 基于功能点清单，按 `references/testpoint_checklist.md` 的 5 维度 + 覆盖清单，逐功能点系统化产出**测试点**（描述"怎么测"，不含预期结果）。
 
+- **四类场景强制配额**（每功能点，见 `testpoint_checklist.md` 第二节）：正常流程 ≥1 条 · 异常操作 + 边界条件合计 ≥3 条 · **权限校验 ≥1 条**（未登录 / 无权限 / 跨角色越权；无账号体系的离线产品可豁免，须写明理由）。只测顺利路径是最常见的返工来源。
 - **输出路径（强制）**：`test_output/{版本+需求名}/testpoint/{版本} 测试点.md`。
 - 直接写 Markdown（如需程序化生成可扩展 `scripts/testpoint_md.py`）。
 
@@ -93,7 +95,7 @@ agent_created: true
 
 - 每条用例写 `priority`（P0–P3 四级之一，定级规则见 `references/priority_p0_p3.md` 的五维评分 + R1–R7 硬规则）、`design_method`（6 方法之一或多）、`module`、`precondition`、`steps`、`expected`、`test_data`、`coverage_rule`。
 - **写法强制要求**（实证模式，完整见 `references/excellent_case_patterns.md`，生成时逐条比对）：① 双前置列分离——`测试环境` 写可整块复用的编号式环境清单，`前置条件` 写本条界面/状态；② 步骤以动词白名单开头（点击/输入/勾选/查验/进入/设置/选择/关闭/上传/下载/对比/记录），按钮名与界面名写具体；③ 预期一律"应…"或数值断言，UI 给元素清单、文案给逐字内容、数据给具体值，**禁止**"合理/美观/流畅/友好/正常显示"等不可判定词；④ 每个等价类 / 边界值 / 权限矩阵 / 多入口 / 多模式测试点**成组输出 ≥3 条**同构用例；⑤ 非功能用例走"场景化前置 + 量化预期 + 统计表引用"三件套；⑥ 版本/端/机型标签列分布均衡，多语言用例预期带差异要求。
-- **质量预审闸门**：运行 `scripts/prescreen.py cases.json --requirement-rules requirement_rules.json`（见 `references/quality_prescreen.md`）。8 项不达标 → 自动修正后重跑；阈值按项目在**检查点①**确认（安全攸关软件上调 P0 占比）。
+- **质量预审闸门**：运行 `scripts/prescreen.py cases.json --requirement-rules requirement_rules.json`（见 `references/quality_prescreen.md`）。**9 项**不达标 → 自动修正后重跑；阈值按项目在**检查点①**确认（安全攸关软件上调 P0 占比）。
 
 ### Step 6 — 测试用例输出
 
@@ -101,9 +103,10 @@ agent_created: true
 2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。项目要求"环境准备 / 界面状态"分列时加 `--with-environment` 输出 11 列（双前置列，见 `excellent_case_patterns.md` 做法 1）；用例中存在**范围性用例**（一条覆盖多个并列子场景）时加 `--with-remark` 在末列输出「备注」列承载场景展开（见门禁速查 13）。
 3. **可选 XMind**：`scripts/to_xmind.py test_cases.json -o report.xmind --project <项目名>`。
 4. **质量评分**：`scripts/score_testcases.py test_cases.json`（**每项维度均需 ≥90**，任一不足即回退重生成）。
-5. **记忆写入**：`scripts/memory_io.py record --root <项目根> --category <ambiguity|endpoint|granularity|missed> --content <...>`。
+5. **可选：覆盖率评审**：`scripts/coverage_audit.py test_cases.json requirements.json -o 覆盖率报告.md`（见 `references/coverage_audit.md`）。做**模块级**下钻，防"全局 95% 掩盖某模块 40%"；接手**存量用例库**时把第一个参数换成历史 `.xlsx` 即可直接评审。
+6. **记忆写入**：`scripts/memory_io.py record --root <项目根> --category <ambiguity|endpoint|granularity|missed> --content <...>`。
 
-**本步输出**：`.xlsx` 测试用例（主产物）+ 可选 `.xmind` + 评分报告。
+**本步输出**：`.xlsx` 测试用例（主产物）+ 可选 `.xmind` + 评分报告 + 可选覆盖率评审报告。
 
 ## 四核心质量标准（质量目标）
 
@@ -201,19 +204,26 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - 症状：`PermissionError: [Errno 13] Permission denied: '…功能测试用例.xlsx'`，`os.replace` / 直接 `open(...,'wb')` 均失败；根因是本地文档预览器（editor_sdk / Office）/ Excel 正打开该文件持有句柄。
 - 解法：先写到临时名（`_tmp_*.xlsx`）完成导出与校验，再尝试重试覆盖原名 2~3 次；仍被锁则落回 `…（含备注）.xlsx` 之类的明确副本名，并在交付说明中告知用户关闭预览后即可覆盖同名主文件。**不要**因写入失败而中断整条生成链（JSON 与闸门结果均已有效）。
 
+**15. 第 9 项（场景构成）整模块报错 / 覆盖率评审出现"假覆盖"**
+- 第 9 项阻断口径是"模块内用例数 ≥ `--scene-min-cases`（默认 4）且**无任何**异常·边界·权限用例"。小模块（1~3 条）不会触发，属故意设计，不要为了"消灭告警"硬塞负向用例。
+- 若某模块判定长期失灵：多半是 `test_type` 没写或写了非法值，脚本回落到"标题 + 步骤"关键词猜测。**先把 `test_type` 按 `功能/异常/边界/权限/兼容/性能/接口` 规范化**，再重跑。
+- 覆盖率评审的**假覆盖**根因：`coverage_audit.py` 只把"显式 `coverage_rule` 命中"或"文本 bigram 相似度达标"算强匹配；**仅模块名相同只列为疑似覆盖**。若发现报告里覆盖率虚高，检查是不是用例自带 `coverage_rule` 但标注过宽——脚本会直接采信显式标注，不会二次校验。
+- 存量 `.xlsx` 用例库无 `coverage_rule` 属正常，走文本匹配即可；但**表头必须含「测试模块」与「用例名称」**，否则直接报错退出（表头别名见脚本 `HEADER_ALIASES`）。
+
 ## Resources
 
 ### references/
 - `analysis_gate.md` — **流程闸门与硬约束**：阶段 1《测试分析报告》→ 🚧 STOP & ASK → 阶段 2 生成的两阶段流程、报告六节模板、五条硬约束 H1–H5（禁止假设 / 咨询必做 / 术语一致 / 来源可追溯 / 多源融合显式标注）、业务规则咨询三知识源、变更分析、生成后五项自评。
 - `function_points.md` — 功能点定义（功能点≠需求点）、6 类、分解原则。
 - `test_methods.md` — 6 种黑盒测试设计方法及有序叠加。
-- `testpoint_checklist.md` — 测试点 5 维度 + 列表/表单/导入导出/文件上传覆盖清单。
+- `testpoint_checklist.md` — 测试点 5 维度 + **四类场景强制配额**（1 正向 : ≥3 异常·边界 + ≥1 权限）+ 权限校验覆盖清单 + 列表/表单/导入导出/文件上传覆盖清单。
 - `case_design.md` — **用例编写规范唯一权威来源**：10 条设计原则 + 四字段编写规范（标题/前置条件/步骤/预期，已合并原 case_fields.md）+ 测试类型转化要点 + 优先级 P0–P3 四级（完整口径见 priority_p0_p3.md）+ 粒度学习要点。
-- `naming_rules.md` — 测试用例命名规则：目的与原则 + 7 条强制红线（长度 ≤20 字 / 无预期判定词 / 无序号前缀 / 无【】包裹 / 无冗余前缀 / 术语统一 / 无模糊量词）。命名评审必查。
+- `naming_rules.md` — 测试用例命名规则：目的与原则 + 7 条强制红线（长度 ≤20 字 / 无预期判定词 / 无序号前缀 / 无【】包裹 / 无冗余前缀 / 术语统一 / 无模糊量词）+ **用例编号规范**（`TC-{模块缩写}-{序号}`、必须显式写 `id`、全局唯一、编号不进标题）。命名评审必查。
 - `output_format.md` — Excel 10 列模板规范与字段定义。
 - `quality_standards.md` — 四核心质量标准 + 0–100 评分 rubric（定义 + 反面案例 + 评审清单 + 量化评分）。
-- `quality_prescreen.md` — 质量预审 8 项清单与阈值、两个检查点。
-- `workflow.md` — 质量保障机制总览：预审 / 评分 / 记忆三道闸门如何衔接 + 可选技术加速器（6 步流程细节见本 SKILL.md）。
+- `quality_prescreen.md` — 质量预审 9 项清单与阈值、三个检查点。
+- `coverage_audit.md` — **用例覆盖率评审（逆向评审）**：两个使用时机（生成后自审 / 存量用例库评审）、三项能力（多格式解析 / 模块级覆盖率 / 三类缺口 G1·G2·G3）、匹配口径（显式标注优先、模块名只作候选）、六节报告结构、报告如何用（不要平摊工作量）。
+- `workflow.md` — 质量保障机制总览：分析 / 预审 / 评分 / 记忆四道闸门如何衔接 + 可选技术加速器（6 步流程细节见本 SKILL.md）。
 - `data_rules.md` — 数据-规则映射库（测试数据校验规则）；优先级模型见 `case_design.md` / `priority_p0_p3.md`，评分 rubric 见 `quality_standards.md`。
 - `priority_p0_p3.md` — **P0–P3 分级策略**（优先级分级的唯一权威来源）：P0 可行性/概念性测试（横屏主流程 + 竖屏移植等价 + 各端联调）→ P1 主流程必测（横屏 UI 流程图拆解 / 等价类含异常 / 横屏布局适配 / AI 数据准确性 / 设备监控灵敏度 / 数据安全）→ P2 显示完整性 → P3 美观与兼容（旋转布局 / 响应式 / Android·iOS 兼容 / 认证性能）；含五维评分 D1–D5 + 硬规则 R1–R7 + 各级范围/执行/评审/示例 + 质量属性与分端映射 + 分级 SOP。全技能统一采用 P0–P3 四级（无 P4）。
 - `multimodal.md` — 多模态读图：UI 图 / 流程图 / 规则表 → 用例的识别映射。
@@ -225,7 +235,8 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `extract_requirements.py` — Step 1 从 PRD/MD 抽取需求规则清单（默认表格合并到需求陈述级，`--no-merge-tables` 可对照）。
 - `read_ui_image.py` — Step 1 多模态读图骨架生成器（校验图片、输出元素抽取 JSON）。
 - `map_coverage.py` — 用例 → 需求规则 ID 映射器，输出覆盖率与未覆盖规则。
-- `prescreen.py` — Step 5 质量预审闸门（8 项：覆盖率 / P0 / P2 占比 / 方法关联 / 无编造 / 无重复 / 预期可判定 / 标题规范与残缺；P0、P2 阈值可配，支持 6 方法）。
+- `prescreen.py` — Step 5 质量预审闸门（9 项：覆盖率 / P0 / P2 占比 / 方法关联 / 无编造 / 无重复 / 预期可判定 / 标题规范·编号唯一 / 场景构成配额；P0、P2、场景门槛可配，支持 6 方法）。
+- `coverage_audit.py` — Step 6 覆盖率评审（模块级下钻）：用例 `.json`/`.xlsx` × `requirements.json` → Markdown/JSON 报告，识别 G1 缺失 / G2 场景失衡 / G3 名义覆盖。
 - `to_excel.py` — Step 6 用例 JSON → `.xlsx`（10 列），`--emit-template` 生成模板。
 - `to_xmind.py` — Step 6 用例 JSON → `.xmind`（可选输出）。
 - `score_testcases.py` — Step 6 结构化评分器（4 维逐项判定，任一维度 <90 触发回退）。

@@ -19,8 +19,10 @@ English version: [README.en.md](README.en.md)
 - 📥 **多源输入**：PRD（`.md`/`.txt`）、UI 截图（多模态读图）、XMind（`.xmind` 解析）
 - 🚧 **分析闸门（两阶段）**：先出《测试分析报告》→ 确认后才生成；五条硬约束——禁止假设、业务规则咨询必做、术语一致、来源可追溯、多源融合显式标注（见 `references/analysis_gate.md`）
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
+- 🎯 **四类场景配额**：每个功能点 `1 正向 : ≥3 异常·边界` 且 **≥1 条权限校验**（未登录/无权限/跨角色越权），只测顺利路径直接判场景失衡
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
-- 🛡️ **质量预审闸门（8 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与残缺，不达标不出库
+- 🛡️ **质量预审闸门（9 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额，不达标不出库
+- 🔍 **覆盖率评审（逆向）**：拿已有用例库回审需求，输出**模块级**覆盖率 + 三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖）；支持 `.xlsx` 直读，专治"全局 95% 掩盖某模块 40%"（见 `references/coverage_audit.md`）
 - 📐 **实证写法模式**：从真实优秀用例库（1278 条）反推的 10 个可复制做法——双前置列分离、动词白名单、预期断言化、同构组批量产出、非功能三件套等（见 `references/excellent_case_patterns.md`）
 - 🧠 **记忆机制**：记录历史产品约束，跨会话复用
 - 📤 **多格式输出**：Excel（10 列）、XMind、Markdown 测试报告 / 测试点
@@ -49,27 +51,29 @@ testcase-generator/
 ├── README.md                # 中文总览（本文件）
 ├── README.en.md             # 英文总览
 ├── LICENSE                  # MIT
-├── references/              # 方法论与规范（16 篇，按下列分层组织，物理上同目录）
+├── references/              # 方法论与规范（17 篇，按下列分层组织，物理上同目录）
 │   ├── analysis_gate.md      # ★分析闸门与硬约束（两阶段 + STOP & ASK + H1–H5）
 │   ├── case_design.md        # ★用例编写规范唯一权威：设计原则 + 四字段规范 + 类型转化 + 优先级口径 + 粒度
-│   ├── naming_rules.md       # 命名 7 条强制红线
+│   ├── naming_rules.md       # 命名 7 条强制红线 + 用例编号规范（TC-{模块}-{序号}）
 │   ├── output_format.md      # 10 列 Excel 容器定义 + JSON 字段映射
 │   ├── xmind_output.md       # XMind 输出格式规范
 │   ├── function_points.md    # 功能点定义与分解（如何设计）
 │   ├── test_methods.md       # 6 种黑盒方法详解 + 有序叠加
-│   ├── testpoint_checklist.md# 测试点 5 维度 + 常见功能覆盖清单
+│   ├── testpoint_checklist.md# 测试点 5 维度 + 四类场景配额 + 覆盖清单
 │   ├── multimodal.md         # 多模态读图（图→用例）
 │   ├── excellent_case_patterns.md # ★优秀用例实证模式（10 做法 + 自检清单 + 反面清单）
 │   ├── priority_p0_p3.md     # P0–P3 分级策略（优先级口径）
 │   ├── data_rules.md         # 数据-规则映射库（测试数据校验）
 │   ├── quality_standards.md  # 4 大质量标准 + 0–100 评分 rubric
-│   ├── quality_prescreen.md  # 质量预审 8 项闸门与阈值
-│   ├── workflow.md           # 质量保障机制总览（预审/评分/记忆三道闸门 + 技术加速器）
+│   ├── quality_prescreen.md  # 质量预审 9 项闸门与阈值
+│   ├── coverage_audit.md     # ★覆盖率评审（逆向）：模块级下钻 + G1/G2/G3 缺口
+│   ├── workflow.md           # 质量保障机制总览（四道闸门 + 技术加速器）
 │   └── memory_mechanism.md   # 记忆机制
-└── scripts/                 # 可执行脚本（9 个，Python 3.13）
+└── scripts/                 # 可执行脚本（10 个，Python 3.13）
     ├── extract_requirements.py  # Step1 抽取需求规则清单
     ├── map_coverage.py          # 用例↔需求规则覆盖映射
-    ├── prescreen.py             # 质量预审闸门
+    ├── prescreen.py             # 质量预审闸门（9 项）
+    ├── coverage_audit.py        # 覆盖率评审（模块级下钻 + 缺口报告）
     ├── score_testcases.py       # 质量评分
     ├── to_excel.py              # 导出 10 列 Excel（`--emit-template` 出空白模板）
     ├── to_xmind.py              # 导出 XMind
@@ -88,7 +92,7 @@ testcase-generator/
 | **A. 方法论** | `function_points.md`、`test_methods.md`、`testpoint_checklist.md`、`multimodal.md` | 定义"如何设计"（拆解 / 方法 / 测试点 / 读图） |
 | **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（优先级唯一权威来源） |
 | **D. 数据规则** | `data_rules.md` | 仅测试数据校验映射库 |
-| **E. 质量保障** | `quality_standards.md`、`quality_prescreen.md`、`workflow.md`、`memory_mechanism.md` | 定义"怎么验"：标准/评分、预审闸门、机制总览、记忆 |
+| **E. 质量保障** | `quality_standards.md`、`quality_prescreen.md`、`coverage_audit.md`、`workflow.md`、`memory_mechanism.md` | 定义"怎么验"：标准/评分、预审闸门、覆盖率评审（模块级下钻）、机制总览、记忆 |
 
 > **边界原则：每条规则只在一处定义（单一真相源）。** `case_design.md` 为用例编写规范唯一权威；优先级模型只存于 `priority_p0_p3.md`(P0–P3，唯一权威)；评分 rubric 只在 `quality_standards.md`；数据校验只在 `data_rules.md`。交叉处一律用"见 xxx"引用，不复制规则。
 
@@ -98,10 +102,10 @@ testcase-generator/
 |---|---|---|
 | ① | 需求深度分析 | `requirements.json` / `requirement_rules.json` / `requirements.md` + **《测试分析报告》**（🚧 STOP & ASK：确认后才继续） |
 | ② | 功能点分解 | 原子化功能点清单（页面/模块维度） |
-| ③ | 测试点分析 | 测试点 Markdown（5 维度覆盖） |
+| ③ | 测试点分析 | 测试点 Markdown（5 维度覆盖 + 四类场景配额） |
 | ④ | 模板确认 | 10 列 Excel 模板 + 命名/优先级口径 |
 | ⑤ | 用例设计 | 结构化用例 JSON（含 `coverage_rule` / `design_method` / `priority`） |
-| ⑥ | 用例输出 | 10 列 Excel + XMind + 测试报告 + 质量评分 |
+| ⑥ | 用例输出 | 10 列 Excel + XMind + 测试报告 + 质量评分 + 可选覆盖率评审报告 |
 
 ## 五、Excel 10 列模板
 
@@ -132,9 +136,13 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. 覆盖映射
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. 质量预审闸门（不达标会列出缺口）
+# 4. 质量预审闸门（9 项，不达标会列出缺口）
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
+
+# 4b. 覆盖率评审：模块级下钻 + 三类缺口（可选；首个参数也可直接传历史用例库 .xlsx）
+python scripts/coverage_audit.py ./out/test_cases_mapped.json ./out/requirements.json \
+    -o ./out/覆盖率报告.md
 
 # 5. 导出 10 列 Excel（需"测试环境/前置条件"分列时加 --with-environment 出 11 列）
 python scripts/to_excel.py ./out/test_cases_final.json -o 测试用例.xlsx [--with-environment]

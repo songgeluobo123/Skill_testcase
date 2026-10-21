@@ -19,8 +19,10 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 📥 **Multi-source input**: PRD (`.md`/`.txt`), UI screenshots (multimodal), XMind (`.xmind` parsing)
 - 🚧 **Analysis gate (two phases)**: produce a Test Analysis Report first → generate only after confirmation; five hard constraints — no assumptions, mandatory business-rule consultation, terminology consistency, traceable sources, explicit multi-source attribution (see `references/analysis_gate.md`)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
+- 🎯 **Four-scenario quota**: per function point, `1 positive : ≥3 negative/boundary` and **≥1 permission case** (not logged in / no permission / cross-role escalation); happy-path-only modules are flagged as imbalanced
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
-- 🛡️ **Quality prescreen gate (8 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & completeness — fails the gate, no release
+- 🛡️ **Quality prescreen gate (9 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota — fails the gate, no release
+- 🔍 **Coverage audit (reverse direction)**: review an existing case library against requirements and produce **module-level** coverage plus three gap types (G1 missing / G2 imbalanced scenarios / G3 nominal coverage); reads `.xlsx` directly (see `references/coverage_audit.md`)
 - 📐 **Evidence-based writing patterns**: 10 reproducible practices reverse-engineered from a real high-quality case library (1,278 cases) — split environment/precondition columns, verb whitelist, assertion-style expected results, isomorphic groups, non-functional triad (see `references/excellent_case_patterns.md`)
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
@@ -49,10 +51,10 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (16 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (17 files; organized by layer below, physically flat)
 │   ├── analysis_gate.md      # ★ analysis gate & hard constraints (two phases + STOP & ASK + H1–H5)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
-│   ├── naming_rules.md       # 7 hard naming red-lines
+│   ├── naming_rules.md       # 7 hard naming red-lines + case-ID convention (TC-{module}-{seq})
 │   ├── output_format.md      # 10-column Excel container definition + JSON field mapping
 │   ├── xmind_output.md       # XMind output format spec
 │   ├── function_points.md    # Function-point definition & decomposition (how to design)
@@ -63,13 +65,15 @@ testcase-generator/
 │   ├── priority_p0_p3.md     # P0–P3 grading strategy (priority)
 │   ├── data_rules.md         # Data-rule mapping library (test-data validation)
 │   ├── quality_standards.md  # 4 quality standards + 0–100 scoring rubric
-│   ├── quality_prescreen.md  # Quality prescreen 8 gates & thresholds
-│   ├── workflow.md           # Quality-assurance overview (prescreen/score/memory gates + accelerators)
+│   ├── quality_prescreen.md  # Quality prescreen 9 gates & thresholds
+│   ├── coverage_audit.md     # ★ coverage audit (reverse): module drill-down + G1/G2/G3 gaps
+│   ├── workflow.md           # Quality-assurance overview (four gates + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (9, Python 3.13)
+└── scripts/                 # Executable scripts (10, Python 3.13)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
-    ├── prescreen.py             # Quality prescreen gate
+    ├── prescreen.py             # Quality prescreen gate (9 checks)
+    ├── coverage_audit.py        # Coverage audit (module drill-down + gap report)
     ├── score_testcases.py       # Quality scoring
     ├── to_excel.py              # Export 10-column Excel (`--emit-template` for blank template)
     ├── to_xmind.py              # Export XMind
@@ -88,7 +92,7 @@ testcase-generator/
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
 | **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
 | **D. Data rules** | `data_rules.md` | Test-data validation mapping only |
-| **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, mechanism overview, memory |
+| **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `coverage_audit.md`, `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, coverage audit (module drill-down), mechanism overview, memory |
 
 > **Boundary rule: each rule is defined exactly once (single source of truth).** `case_design.md` is the sole authority for case authoring; the priority model lives only in `priority_p0_p3.md` (P0–P3, sole authority); the scoring rubric lives only in `quality_standards.md`; data validation only in `data_rules.md`. Cross-references use "see xxx" instead of copying rules.
 
@@ -98,10 +102,10 @@ testcase-generator/
 |---|---|---|
 | ① | Requirement deep analysis | `requirements.json` / `requirement_rules.json` / `requirements.md` + **Test Analysis Report** (🚧 STOP & ASK: continue only after confirmation) |
 | ② | Function-point decomposition | Atomic function-point list (page/module dimension) |
-| ③ | Test-point analysis | Test-point Markdown (5-dimension coverage) |
+| ③ | Test-point analysis | Test-point Markdown (5-dimension coverage + four-scenario quota) |
 | ④ | Template confirmation | 10-column Excel template + naming/priority convention |
 | ⑤ | Case design | Structured case JSON (`coverage_rule` / `design_method` / `priority`) |
-| ⑥ | Case output | 10-column Excel + XMind + test report + quality score |
+| ⑥ | Case output | 10-column Excel + XMind + test report + quality score + optional coverage-audit report |
 
 ## 5. Excel 10-column template
 
@@ -132,9 +136,13 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. coverage mapping
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. quality prescreen gate (lists gaps if it fails)
+# 4. quality prescreen gate (9 checks; lists gaps if it fails)
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
+
+# 4b. coverage audit: module drill-down + three gap types (optional; first arg may be an .xlsx library)
+python scripts/coverage_audit.py ./out/test_cases_mapped.json ./out/requirements.json \
+    -o ./out/coverage-report.md
 
 # 5. export 10-column Excel
 python scripts/to_excel.py ./out/test_cases_final.json -o cases.xlsx

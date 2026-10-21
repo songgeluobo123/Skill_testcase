@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-prescreen.py — 测试用例质量预审器（正式生成前的 8 项闸门）
+prescreen.py — 测试用例质量预审器（正式生成前的 9 项闸门）
 
 检查项（详见 references/quality_prescreen.md）：
   1. 需求覆盖率 >= coverage_min（需 --requirement-rules 提供需求规则清单）
@@ -12,7 +12,9 @@ prescreen.py — 测试用例质量预审器（正式生成前的 8 项闸门）
   6. 无语义重复（同 module+steps+expected 去重）
   7. 预期结果可判定（无"合理/美观/流畅"类不可判定词；缺断言标志仅告警）
   8. 标题规范与残缺检查（≤20 字 / 无编号前缀 / 无【】 / 无句末标点 / 无占位残留；
-     缺标题或缺步骤即阻断；重名标题仅告警）
+     缺标题或缺步骤即阻断；重名标题仅告警；用例编号重复即阻断）
+  9. 场景构成配额（每功能点 1 正向 : ≥3 异常·边界·权限；模块内无异常/边界即阻断，
+     负向偏少或缺权限校验仅告警）
 
 退出码：
   0  —— 全部通过（或仅警告）
@@ -22,10 +24,11 @@ prescreen.py — 测试用例质量预审器（正式生成前的 8 项闸门）
 用法：
   python prescreen.py cases.json --requirement-rules requirements.json
   python prescreen.py cases.json --p0-min 0.40 --p0-max 0.60
-  python prescreen.py cases.json            # 仅做 2/3/4/6/7/8 检查
+  python prescreen.py cases.json            # 仅做 2/3/4/6/7/8/9 检查
 
 优先级采用 P0-P3（P0 最高，一票否决）；全技能统一，无 P4。
-可判定性与标题检查的实证依据见 references/excellent_case_patterns.md。
+可判定性、标题检查、场景配额的依据见 references/excellent_case_patterns.md
+与 references/testpoint_checklist.md 第二节。
 """
 
 import argparse
@@ -45,6 +48,12 @@ UNJUDGEABLE_WORDS = [
 ASSERT_MARKERS = re.compile(r"应|必须|需|为[:：]|=\s*\d|>\s*\d|<\s*\d|\d|1[.、]|提示|显示为|保持")
 # 检查 8：标题占位残留
 TITLE_PLACEHOLDER = re.compile(r"待.{0,6}更新|TBD|TODO|XXX+|xxxx|【】|\[\]", re.IGNORECASE)
+
+# 检查 9：场景构成配额（正向 : 异常·边界·权限），口径见 testpoint_checklist.md 第二节
+PERM_KEYS = ["权限", "越权", "角色", "未登录", "未授权", "鉴权", "登录态", "白名单", "游客"]
+NEG_KEYS = ["异常", "边界", "失败", "错误", "超限", "超时", "为空", "空值", "非法",
+            "不支持", "重复", "断网", "弱网", "逆向", "负向", "拒绝", "上限", "下限",
+            "最大", "最小", "超出", "超过"]
 
 
 
@@ -67,7 +76,7 @@ def norm(s):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="测试用例质量预审器（8 项闸门）")
+    ap = argparse.ArgumentParser(description="测试用例质量预审器（9 项闸门）")
     ap.add_argument("input", help="用例 JSON 文件路径")
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON（字符串数组）")
     ap.add_argument("--coverage-min", type=float, default=0.95)
@@ -75,6 +84,8 @@ def main():
     ap.add_argument("--p0-max", type=float, default=0.15)
     ap.add_argument("--p2-min", type=float, default=0.35)
     ap.add_argument("--p2-max", type=float, default=0.45)
+    ap.add_argument("--scene-min-cases", type=int, default=4,
+                    help="模块场景构成检查的最小用例数门槛（默认 4，少于该数不判负向缺失）")
     args = ap.parse_args()
 
     try:
@@ -233,6 +244,57 @@ def main():
     dup_titles = [(k[1], v) for k, v in title_map.items() if len(v) > 1]
     if dup_titles:
         warns.append(f"{len(dup_titles)} 组同模块标题重名，须靠唯一用例编号区分: {dup_titles[:5]}")
+
+    # 8b. 用例编号唯一性（编号是追溯锚点，重复即阻断）
+    id_map = {}
+    for c in cases:
+        cid = str(c.get("id", "") or "").strip()
+        if cid:
+            id_map.setdefault(cid, 0)
+            id_map[cid] += 1
+    dup_ids = [cid for cid, n in id_map.items() if n > 1]
+    if dup_ids:
+        fails.append(f"{len(dup_ids)} 个用例编号重复（追溯锚点不得重复）: {dup_ids[:10]}")
+    else:
+        print(f"[✓] 用例编号唯一（{len(id_map)} 个显式编号）")
+
+    # 9. 场景构成配额（每功能点 1 正向 : ≥3 异常/边界，含权限校验）
+    mod_scene = {}
+    for c in cases:
+        m = str(c.get("module", "") or "(未分模块)")
+        d = mod_scene.setdefault(m, {"pos": 0, "neg": 0, "perm": 0, "n": 0})
+        d["n"] += 1
+        tt = str(c.get("test_type", ""))
+        text = " ".join([tt, str(c.get("title", "")), str(c.get("steps", ""))])
+        is_perm = any(k in text for k in PERM_KEYS)
+        if is_perm:
+            d["perm"] += 1
+        if "异常" in tt or "边界" in tt or "权限" in tt:
+            d["neg"] += 1
+        elif "功能" in tt or "正向" in tt or "正常" in tt:
+            d["pos"] += 1
+        elif any(k in text for k in NEG_KEYS):
+            d["neg"] += 1
+        else:
+            d["pos"] += 1
+
+    zero_neg, thin_neg, no_perm = [], [], []
+    for m, d in sorted(mod_scene.items()):
+        if d["n"] >= args.scene_min_cases and d["neg"] == 0:
+            zero_neg.append(f"{m}({d['n']} 条)")
+        elif d["pos"] and d["neg"] / d["pos"] < 1 / 3:
+            thin_neg.append(f"{m}(正{d['pos']}:负{d['neg']})")
+        if d["n"] >= args.scene_min_cases and d["perm"] == 0:
+            no_perm.append(f"{m}({d['n']} 条)")
+
+    if zero_neg:
+        fails.append(f"{len(zero_neg)} 个模块无任何异常/边界用例（违反 1 正向:≥3 负向配额）: {zero_neg[:5]}")
+    else:
+        print(f"[✓] 各模块均含异常/边界类用例")
+    if thin_neg:
+        warns.append(f"{len(thin_neg)} 个模块负向用例偏少（建议 1 正向 : ≥3 异常/边界）: {thin_neg[:5]}")
+    if no_perm:
+        warns.append(f"{len(no_perm)} 个模块无权限校验类用例: {no_perm[:5]}")
 
     print()
     if fails:
