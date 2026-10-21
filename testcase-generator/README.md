@@ -17,6 +17,7 @@ English version: [README.en.md](README.en.md)
 ## 二、能力特性
 
 - 📥 **多源输入**：PRD（`.md`/`.txt`）、UI 截图（多模态读图）、XMind（`.xmind` 解析）
+- 🚧 **分析闸门（两阶段）**：先出《测试分析报告》→ 确认后才生成；五条硬约束——禁止假设、业务规则咨询必做、术语一致、来源可追溯、多源融合显式标注（见 `references/analysis_gate.md`）
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
 - 🛡️ **质量预审闸门（8 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与残缺，不达标不出库
@@ -48,7 +49,8 @@ testcase-generator/
 ├── README.md                # 中文总览（本文件）
 ├── README.en.md             # 英文总览
 ├── LICENSE                  # MIT
-├── references/              # 方法论与规范（15 篇，按下列分层组织，物理上同目录）
+├── references/              # 方法论与规范（16 篇，按下列分层组织，物理上同目录）
+│   ├── analysis_gate.md      # ★分析闸门与硬约束（两阶段 + STOP & ASK + H1–H5）
 │   ├── case_design.md        # ★用例编写规范唯一权威：设计原则 + 四字段规范 + 类型转化 + 优先级口径 + 粒度
 │   ├── naming_rules.md       # 命名 7 条强制红线
 │   ├── output_format.md      # 10 列 Excel 容器定义 + JSON 字段映射
@@ -81,6 +83,7 @@ testcase-generator/
 | 层 | 文件 | 职责边界 |
 |---|---|---|
 | **控制面** | `SKILL.md` | 6 步工作流编排 + 资源索引；不存放具体规范细节 |
+| **F. 流程闸门** | `analysis_gate.md` | 定义"什么时候可以开始生成"：两阶段（分析→确认→生成）、报告模板、硬约束 H1–H5 |
 | **B. 用例编写规范** | `case_design.md`（权威）、`naming_rules.md`、`output_format.md`、`xmind_output.md`、`excellent_case_patterns.md`（经验证据层） | 定义"用例怎么写"：字段写法、命名红线、Excel/XMind 容器、优秀范式与反面清单 |
 | **A. 方法论** | `function_points.md`、`test_methods.md`、`testpoint_checklist.md`、`multimodal.md` | 定义"如何设计"（拆解 / 方法 / 测试点 / 读图） |
 | **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（优先级唯一权威来源） |
@@ -93,7 +96,7 @@ testcase-generator/
 
 | 步骤 | 名称 | 产出 |
 |---|---|---|
-| ① | 需求深度分析 | `requirements.json` / `requirement_rules.json` / `requirements.md` |
+| ① | 需求深度分析 | `requirements.json` / `requirement_rules.json` / `requirements.md` + **《测试分析报告》**（🚧 STOP & ASK：确认后才继续） |
 | ② | 功能点分解 | 原子化功能点清单（页面/模块维度） |
 | ③ | 测试点分析 | 测试点 Markdown（5 维度覆盖） |
 | ④ | 模板确认 | 10 列 Excel 模板 + 命名/优先级口径 |

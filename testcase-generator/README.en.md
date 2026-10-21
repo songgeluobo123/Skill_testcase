@@ -17,6 +17,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 ## 2. Features
 
 - 📥 **Multi-source input**: PRD (`.md`/`.txt`), UI screenshots (multimodal), XMind (`.xmind` parsing)
+- 🚧 **Analysis gate (two phases)**: produce a Test Analysis Report first → generate only after confirmation; five hard constraints — no assumptions, mandatory business-rule consultation, terminology consistency, traceable sources, explicit multi-source attribution (see `references/analysis_gate.md`)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
 - 🛡️ **Quality prescreen gate (8 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & completeness — fails the gate, no release
@@ -48,7 +49,8 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (15 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (16 files; organized by layer below, physically flat)
+│   ├── analysis_gate.md      # ★ analysis gate & hard constraints (two phases + STOP & ASK + H1–H5)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
 │   ├── naming_rules.md       # 7 hard naming red-lines
 │   ├── output_format.md      # 10-column Excel container definition + JSON field mapping
@@ -81,6 +83,7 @@ testcase-generator/
 | Layer | Files | Boundary |
 |---|---|---|
 | **Control plane** | `SKILL.md` | 6-step orchestration + resource index; holds no detailed spec |
+| **F. Process gate** | `analysis_gate.md` | Defines "when generation may start": two phases (analysis → confirmation → generation), report template, hard constraints H1–H5 |
 | **B. Case authoring** | `case_design.md` (authority), `naming_rules.md`, `output_format.md`, `xmind_output.md`, `excellent_case_patterns.md` (evidence layer) | Defines "how a case is written": field rules, naming red-lines, Excel/XMind containers, proven patterns & anti-patterns |
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
 | **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
@@ -93,7 +96,7 @@ testcase-generator/
 
 | Step | Name | Artifact |
 |---|---|---|
-| ① | Requirement deep analysis | `requirements.json` / `requirement_rules.json` / `requirements.md` |
+| ① | Requirement deep analysis | `requirements.json` / `requirement_rules.json` / `requirements.md` + **Test Analysis Report** (🚧 STOP & ASK: continue only after confirmation) |
 | ② | Function-point decomposition | Atomic function-point list (page/module dimension) |
 | ③ | Test-point analysis | Test-point Markdown (5-dimension coverage) |
 | ④ | Template confirmation | 10-column Excel template + naming/priority convention |
