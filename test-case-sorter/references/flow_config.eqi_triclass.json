@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "project": "EQi 智能健身 AI魔镜跑步机 三分类 V2.1（EQiSmart Ai Coach健身产品测试用例V1.0 - 软件_版本归类.xlsx，sheet=AI魔镜跑步机T5102）",
+    "module_col": "设备型号",
+    "order_col": "归类编号",
+    "note": "按三分类（公共→横屏专项→竖屏专项）分组；组内按‘归类编号’（功能模块-序号，如 启动-001）二级自然排序。执行：python sort_test_cases.py <file> --sheet \"AI魔镜跑步机T5102\" --flow-config flow_config.eqi_triclass.json --module-col 设备型号 --order-col 归类编号",
+    "version": "1.0"
+  },
+  "module_sequence": [
+    "公共",
+    "横屏专项",
+    "竖屏专项"
+  ],
+  "module_flow": {}
+}

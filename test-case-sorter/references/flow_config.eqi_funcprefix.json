@@ -1,0 +1,14 @@
+{
+  "_meta": {
+    "project": "EQi 智能健身 功能模块轴（演示层级前缀匹配）",
+    "module_col": "功能模块",
+    "order_col": "归类编号",
+    "note": "module_sequence 仅列顶级组 [设备端, 移动端]；skill 的前缀匹配把‘设备端-启动’‘移动端-登录’等 15 个子模块自动归入对应组，无需枚举完整路径；组内按‘归类编号’二级自然排序。执行：python sort_test_cases.py <file> --sheet \"AI魔镜跑步机T5102\" --flow-config flow_config.eqi_funcprefix.json --module-col 功能模块 --order-col 归类编号",
+    "version": "1.0"
+  },
+  "module_sequence": [
+    "设备端",
+    "移动端"
+  ],
+  "module_flow": {}
+}

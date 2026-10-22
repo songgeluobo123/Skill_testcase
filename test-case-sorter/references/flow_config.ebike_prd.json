@@ -1,0 +1,33 @@
+{
+  "_meta": {
+    "project": "E-Bike PRD v1.0 生成用例（E-Bike_PRD_v1.0 功能测试用例.xlsx）",
+    "module_col": "测试模块",
+    "note": "module_sequence 按‘设计原则/定位→Onboarding→车辆管理→首页导航→各骑行模式→训练/心率/助力→报告/历史/异常→设置→数据下行→车端安全/LCD→MVP边界’的业务先后枚举完整模块路径（含 /App、/数据、/车端 前缀）；本文件无独立功能点列，module_flow 留空，模块内保持原始顺序。",
+    "version": "1.0"
+  },
+  "module_sequence": [
+    "/App/核心设计原则",
+    "/App/产品定位",
+    "/App/目标市场合规",
+    "/App/Onboarding",
+    "/App/车辆管理",
+    "/App/首页与导航",
+    "/App/通勤模式",
+    "/App/自由骑行",
+    "/App/训练模式(户外)",
+    "/App/室内训练",
+    "/App/Scooter骑行",
+    "/App/训练模板体系",
+    "/App/心率系统",
+    "/App/助力方案与档位",
+    "/App/骑行报告",
+    "/App/历史记录",
+    "/App/异常与恢复",
+    "/App/设置",
+    "/数据/采集与下行",
+    "/车端/反射层安全",
+    "/车端/LCD显示",
+    "/App/MVP边界"
+  ],
+  "module_flow": {}
+}

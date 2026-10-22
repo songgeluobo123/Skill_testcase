@@ -5,6 +5,7 @@
 | 技能 | 说明 |
 |---|---|
 | [`testcase-generator/`](testcase-generator/) | 把 PRD / UI 设计图 / XMind 需求，结构化转成可直接执行的测试用例（10 列 Excel 主产物） |
+| [`test-case-sorter/`](test-case-sorter/) | 按业务流程给测试用例排序：五层模型 + 六级判定优先级，还原可直接执行的用例顺序（内容与格式零改动） |
 
 更新日志见 [CHANGELOG.md](CHANGELOG.md)。
 
