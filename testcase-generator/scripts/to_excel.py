@@ -123,6 +123,8 @@ def main():
                     help="输出 11 列：在「前置条件」前增加「测试环境」列（双前置列实证模式）")
     ap.add_argument("--with-remark", action="store_true",
                     help="在末尾追加「备注」列（范围性用例逐项展开子场景操作用）")
+    ap.add_argument("--with-rtm", metavar="REQUIREMENTS",
+                    help="在第二个 sheet 追加「需求追溯」矩阵（需 requirements.json）")
     args = ap.parse_args()
 
     if args.emit_template:
@@ -168,6 +170,17 @@ def main():
         print(f"[警告] 以下用例优先级非法（应为 P0-P3）: {bad[:10]}", file=sys.stderr)
 
     wb = build_workbook(cases, args.with_environment, args.with_remark)
+    if args.with_rtm:
+        try:
+            import coverage_audit
+            rules = coverage_audit.load_rules(args.with_rtm)
+            rtm = coverage_audit.build_rtm(cases, rules)
+            coverage_audit.append_rtm_sheet(wb, rtm)
+            print(f"[✓] 需求追溯 sheet 已追加（全覆盖 {rtm['summary']['full']} / "
+                  f"部分 {rtm['summary']['partial']} / 未覆盖 {rtm['summary']['uncovered']} / "
+                  f"孤儿 {rtm['summary']['orphans']}）")
+        except Exception as e:
+            print(f"[警告] 需求追溯 sheet 生成失败: {e}", file=sys.stderr)
     wb.save(args.output)
     ncol = len(COLUMNS) + (1 if args.with_environment else 0) + (1 if args.with_remark else 0)
     print(f"[✓] 已生成 Excel: {args.output}（{len(cases)} 条用例，{ncol} 列）")

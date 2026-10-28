@@ -8,7 +8,7 @@ AI 生成用例最让人不放心的不是慢，而是**你不知道它漏了什
 
 ---
 
-## 9 项检查 + 默认阈值
+## 10 项检查 + 默认阈值
 
 | # | 检查项 | 默认阈值 / 规则 | 不达标处理 |
 | --- | --- | --- | --- |
@@ -21,11 +21,13 @@ AI 生成用例最让人不放心的不是慢，而是**你不知道它漏了什
 | 7 | **预期结果可判定** | 预期不得为空；不得命中不可判定词（`合理/美观/友好/流畅/良好/正常显示/工整/尽量/适当/无异常/不卡顿…`）；缺"应 / 数值 / 逐字文案 / 清单编号"等断言标志仅告警 | 改写为断言句 + 具体值 |
 | 8 | **标题规范与残缺检查** | 标题 ≤20 字、无序号前缀（`1、`）、无【】、无句末标点；`steps` 不得为空；标题不得含占位残留（`（待XX更新）`/`TBD`/`XXX`）。同模块标题重名仅告警（须靠唯一用例编号区分）；**用例编号重复即阻断**（编号是追溯锚点，见 `naming_rules.md` 第三节） | 重写标题 / 补步骤 / 清占位 / 改编号 |
 | 9 | **场景构成配额** | 每功能点 `1 正向 : ≥3 异常·边界·权限`。模块内用例数 ≥4（`--scene-min-cases`）且**无任何异常/边界/权限用例 → 阻断**；负向偏少（`负/正 < 1/3`）或缺权限校验类仅告警 | 补异常/边界/权限用例 |
+| 10 | **孤儿用例** | 无 `coverage_rule` 且未标 `exploratory: true` 的用例视为孤儿（反向追溯缺失）。默认 **`--orphan-max 0.0`：任何孤儿即阻断**；设为 0.1 则允许 10% 并降级为告警 | 补 `coverage_rule` / 补需求 / 标 `exploratory: true` |
 
 > 阈值可按项目调整（见下）。例如安全攸关系统常把 P0 占比上调；记忆机制会记住该项目偏好。
 > 优先级采用 **P0–P3**（P0=可行性/概念性测试一票否决最高，P1=主流程必测，P2=显示完整性，P3=美观与兼容），与 `priority_p0_p3.md` 口径一致，全技能统一，无 P4。
 > 第 7/8 项的实证依据（为什么这么卡）见 `excellent_case_patterns.md`——两条检查分别对应真实优秀库中最常见的两类问题：不可判定预期、占位/残缺/超长标题混入库。
 > 第 9 项口径见 `testpoint_checklist.md` 第二节（四类场景强制配额）；模块级下钻评审见 `coverage_audit.md`。
+> 第 10 项（孤儿用例）是**反向追溯**：需求→用例查漏测，用例→需求查"为什么存在"。口径与 RTM 输出（Excel 第二 sheet）见 `coverage_audit.md`「双向追溯」。
 
 ## 执行
 
@@ -34,7 +36,7 @@ AI 生成用例最让人不放心的不是慢，而是**你不知道它漏了什
 python scripts/extract_requirements.py PRD.md -o ./out
 python scripts/map_coverage.py cases.json ./out/requirements.json -o cases.json
 
-# 全部 9 项（推荐，覆盖率检查需需求清单）
+# 全部 10 项（推荐，覆盖率检查需需求清单）
 python scripts/prescreen.py cases.json --requirement-rules ./out/requirement_rules.json
 
 # 仅优先级/方法/重复/可判定性/标题/场景构成检查（无需求清单时）
@@ -45,6 +47,9 @@ python scripts/prescreen.py cases.json --p0-min 0.40 --p0-max 0.60
 
 # 场景构成门槛（模块用例数少于该值不判负向缺失）
 python scripts/prescreen.py cases.json --scene-min-cases 6
+
+# 孤儿用例阈值放宽（默认 0.0=任何孤儿即阻断；0.1=允许 10% 并降级为告警）
+python scripts/prescreen.py cases.json --orphan-max 0.1
 ```
 
 - **全过** → 进入下一阶段 / 输出。

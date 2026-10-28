@@ -21,6 +21,8 @@ coverage_audit.py — 用例覆盖率评审器（用例库 × 需求文档 → �
   python coverage_audit.py cases.xlsx requirements.json -o 覆盖率报告.md
   python coverage_audit.py test_cases.json requirements.json --module-min 0.8
   python coverage_audit.py cases.xlsx requirements.json --format json -o audit.json
+  python coverage_audit.py test_cases.json requirements.json --rtm-xlsx 功能测试用例.xlsx
+      # 双向追溯（RTM）：需求→用例 / 用例→需求 / 部分覆盖 / 孤儿用例，写入 Excel 第二个 sheet
 
 退出码：0 全部模块达标；1 存在低于阈值的模块或 G1 缺口；2 输入/参数错误。
 """
@@ -286,6 +288,191 @@ def audit(cases, rules, top=3, threshold=0.08, module_min=DEFAULT_MODULE_MIN):
     }
 
 
+# ---------------------------------------------------------------- 双向追溯（RTM）
+def _mod_match(a, b):
+    a, b = norm_module(a), norm_module(b)
+    return bool(a and b and (a in b or b in a))
+
+
+def _is_negative_case(c):
+    neg, perm = classify(c)
+    return bool(neg or perm)
+
+
+def build_rtm(cases, rules, threshold=0.08, top=3):
+    """双向需求追溯：需求→用例 / 用例→需求，并识别部分覆盖与孤儿用例。
+
+    覆盖状态口径：
+      full       至少 1 条异常/边界/权限用例（或该需求只有负向用例）
+      partial    有映射用例，但全部是正向（只测顺利路径，不算真覆盖）
+      uncovered  无任何强映射
+    用例侧：
+      orphan     无 coverage_rule、文本/模块均未匹配（exploratory=true 可豁免）
+      weak_only  仅模块名相同（疑似映射，需人工确认，不计孤儿）
+    """
+    rule_by_id = {r["id"]: r for r in rules if r.get("id")}
+    case_by_id = {}
+    req_cases = {rid: [] for rid in rule_by_id}
+    case_reqs = {}
+    orphans, weak_only = [], []
+
+    for c in cases:
+        cid = str(c.get("id", "")).strip() or f"(无编号-{id(c)})"
+        case_by_id[cid] = c
+        explicit = [t.strip() for t in str(c.get("coverage_rule", "")).split(";")
+                    if re.fullmatch(r"R-\d+", t.strip()) and t.strip() in rule_by_id]
+        strong = list(dict.fromkeys(explicit))
+        weak = []
+        if not strong:
+            cm = norm_module(c.get("module", ""))
+            ctext = case_text(c)
+            scored = []
+            for rid, r in rule_by_id.items():
+                jac = jaccard(ctext, r.get("text", ""))
+                if jac >= threshold:
+                    scored.append((jac, rid))
+                elif _mod_match(cm, r.get("module", "")):
+                    weak.append(rid)
+            scored.sort(reverse=True)
+            strong = [rid for _, rid in scored[:top]]
+        case_reqs[cid] = strong
+        for rid in strong:
+            req_cases[rid].append(cid)
+        if not strong:
+            if c.get("exploratory"):
+                continue
+            if weak:
+                weak_only.append({"id": cid, "module": c.get("module", ""),
+                                  "title": c.get("title", ""), "hint": weak[:3]})
+            else:
+                orphans.append({"id": cid, "module": c.get("module", ""),
+                                "title": c.get("title", "")})
+
+    rows = []
+    for rid, r in rule_by_id.items():
+        cids = req_cases[rid]
+        neg = [x for x in cids if _is_negative_case(case_by_id[x])]
+        if not cids:
+            status = "未覆盖"
+        elif neg:
+            status = "全覆盖"
+        else:
+            status = "部分覆盖"
+        text = (r.get("text") or "").strip().replace("\n", " ")
+        rows.append({
+            "id": rid,
+            "module": norm_module(r.get("module", "")) or "(未分模块)",
+            "text": text,
+            "priority": suggest_priority(text, r),
+            "status": status,
+            "case_count": len(cids),
+            "cases": cids,
+            "gap": "" if status == "全覆盖" else (
+                "无用例覆盖" if status == "未覆盖" else "仅有正向用例，缺异常/边界/权限"),
+        })
+
+    # 高优缺口置顶：P0→P3，未覆盖→部分覆盖→全覆盖
+    order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    rows.sort(key=lambda x: (order.get(x["priority"], 9),
+                             {"未覆盖": 0, "部分覆盖": 1, "全覆盖": 2}[x["status"]]))
+    summary = {
+        "total": len(rows),
+        "full": sum(1 for x in rows if x["status"] == "全覆盖"),
+        "partial": sum(1 for x in rows if x["status"] == "部分覆盖"),
+        "uncovered": sum(1 for x in rows if x["status"] == "未覆盖"),
+        "orphans": len(orphans),
+        "weak_only": len(weak_only),
+    }
+    return {"rules": rows, "orphans": orphans, "weak_only": weak_only,
+            "summary": summary, "case_count": len(cases), "case_reqs": case_reqs}
+
+
+RTM_HEADERS = ["需求ID", "模块", "需求描述", "优先级", "覆盖状态", "覆盖用例数", "覆盖用例（编号）", "缺口说明"]
+ORPHAN_HEADERS = ["孤儿用例编号", "模块", "用例名称", "说明"]
+
+
+def append_rtm_sheet(wb, rtm):
+    """把双向追溯矩阵写入工作簿的「需求追溯」sheet（作为第二个 sheet；已存在则重建）。"""
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    name = "需求追溯"
+    if name in wb.sheetnames:
+        del wb[name]
+    ws = wb.create_sheet(name, 1)
+    head_fill = PatternFill("solid", fgColor="305496")
+    head_font = Font(bold=True, color="FFFFFF")
+    wrap = Alignment(vertical="top", wrap_text=True)
+
+    ws.append(RTM_HEADERS)
+    for cell in ws[1]:
+        cell.fill = head_fill
+        cell.font = head_font
+        cell.alignment = wrap
+
+    status_fill = {
+        "未覆盖": PatternFill("solid", fgColor="F8CBAD"),
+        "部分覆盖": PatternFill("solid", fgColor="FFE699"),
+        "全覆盖": PatternFill("solid", fgColor="C6EFCE"),
+    }
+    for r in rtm["rules"]:
+        ws.append([r["id"], r["module"], r["text"], r["priority"], r["status"],
+                   r["case_count"], "；".join(r["cases"]), r["gap"]])
+        for cell in ws[ws.max_row]:
+            cell.alignment = wrap
+        ws.cell(ws.max_row, 5).fill = status_fill[r["status"]]
+
+    ws.append([])
+    ws.append([])
+    ws.append(["孤儿用例（无需求映射，需补需求或标 exploratory）"])
+    ws.cell(ws.max_row, 1).font = Font(bold=True, color="C00000")
+    ws.append(ORPHAN_HEADERS)
+    for cell in ws[ws.max_row]:
+        cell.fill = head_fill
+        cell.font = head_font
+        cell.alignment = wrap
+    if rtm["orphans"]:
+        for o in rtm["orphans"]:
+            ws.append([o["id"], o["module"], o["title"],
+                       "无 coverage_rule，且文本/模块均未匹配到需求"])
+            for cell in ws[ws.max_row]:
+                cell.alignment = wrap
+    else:
+        ws.append(["（无）", "", "", ""])
+
+    if rtm["weak_only"]:
+        ws.append([])
+        ws.append(["疑似映射（仅模块名相同，需人工确认）"])
+        ws.cell(ws.max_row, 1).font = Font(bold=True, color="9C6500")
+        ws.append(["用例编号", "模块", "用例名称", "疑似需求"])
+        for cell in ws[ws.max_row]:
+            cell.fill = head_fill
+            cell.font = head_font
+            cell.alignment = wrap
+        for o in rtm["weak_only"]:
+            ws.append([o["id"], o["module"], o["title"], "、".join(o["hint"])])
+            for cell in ws[ws.max_row]:
+                cell.alignment = wrap
+
+    widths = [12, 18, 52, 8, 10, 10, 40, 30]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+    ws.freeze_panes = "A2"
+    return ws
+
+
+def write_rtm_xlsx(path, rtm):
+    """把 RTM 写入指定 Excel（不存在则新建，存在则替换「需求追溯」sheet）。"""
+    import os
+    from openpyxl import Workbook, load_workbook
+    if os.path.exists(path):
+        wb = load_workbook(path)
+    else:
+        wb = Workbook()
+        wb.active.title = "功能测试用例"
+    append_rtm_sheet(wb, rtm)
+    wb.save(path)
+
+
 # ---------------------------------------------------------------- 报告
 def render_markdown(res, cases_path, rules_path):
     L = []
@@ -441,6 +628,8 @@ def main():
                     help="模块覆盖率达标阈值（默认 0.70，低于即列为重点补充对象）")
     ap.add_argument("--top", type=int, default=3, help="每条用例最多匹配的规则数（默认 3）")
     ap.add_argument("--threshold", type=float, default=0.08, help="文本相似度阈值（默认 0.08）")
+    ap.add_argument("--rtm-xlsx", metavar="PATH",
+                    help="把双向追溯矩阵写入该 Excel 的第二个 sheet（需求→用例 / 用例→需求 / 孤儿用例）")
     args = ap.parse_args()
 
     try:
@@ -454,6 +643,13 @@ def main():
         return 2
 
     res = audit(cases, rules, args.top, args.threshold, args.module_min)
+    rtm = build_rtm(cases, rules, args.threshold, args.top)
+    if args.rtm_xlsx:
+        try:
+            write_rtm_xlsx(args.rtm_xlsx, rtm)
+            print(f"[✓] 需求追溯 sheet 已写入 {args.rtm_xlsx}")
+        except Exception as e:
+            print(f"[警告] 写入需求追溯 sheet 失败: {e}", file=sys.stderr)
     text = render_markdown(res, args.cases, args.requirements) if args.format == "markdown" \
         else render_json(res)
 
@@ -464,6 +660,8 @@ def main():
         print(f"    全局覆盖 {res['covered_rules']}/{res['total_rules']} "
               f"({res['overall']:.1%})，"
               f"{sum(1 for r in res['modules'] if r['coverage'] < args.module_min)} 个模块低于阈值")
+        print(f"    双向追溯：全覆盖 {rtm['summary']['full']} / 部分 {rtm['summary']['partial']} "
+              f"/ 未覆盖 {rtm['summary']['uncovered']}；孤儿用例 {rtm['summary']['orphans']}")
     else:
         print(text)
 

@@ -10,7 +10,7 @@
 | 闸门 | 触发位置 | 作用 | 详解 |
 |---|---|---|---|
 | **分析闸门（analysis gate）** | Step 1 出口（最前置） | 方向闸门：需求理解与测试范围未被确认，**不得进入生成** | `analysis_gate.md`（两阶段流程 + STOP & ASK + 硬约束 H1–H5） |
-| **预审（prescreen）** | Step 5 出口（生成前） | 放行闸门：保证"结构合理、不漏不重、方法到位、预期可判定" | `quality_prescreen.md` + `scripts/prescreen.py`（9 项检查） |
+| **预审（prescreen）** | Step 5 出口（生成前） | 放行闸门：保证"结构合理、不漏不重、方法到位、预期可判定" | `quality_prescreen.md` + `scripts/prescreen.py`（10 项检查） |
 | **评分（score）** | Step 6 出口（生成后） | 质量终审：逐条 0–100 量化（覆盖/准确/可执行/优先级） | `quality_standards.md` 评分 rubric + `scripts/score_testcases.py` |
 | **记忆（memory）** | Step 1 读取 / Step 6 写回 | 跨会话沉淀偏好与判断，越用越准 | `memory_mechanism.md` + `scripts/memory_io.py` |
 

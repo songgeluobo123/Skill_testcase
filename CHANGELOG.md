@@ -2,6 +2,22 @@
 
 本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [1.5.0] - 2026-10-28
+
+### 新增
+
+- **双向需求追溯（RTM）+ 孤儿用例检测**（`testcase-generator`）— 在「模块级覆盖率」之外补上需求级、双向的追溯链路：需求→用例查漏测，用例→需求查"为什么存在"。
+  - **`scripts/coverage_audit.py`**：新增 `build_rtm()` / `append_rtm_sheet()` / `write_rtm_xlsx()` 与 CLI `--rtm-xlsx`。覆盖状态四分类：**全覆盖**（≥1 条异常/边界/权限用例）、**部分覆盖**（仅有正向用例，不计真覆盖）、**未覆盖**、**孤儿用例**（无 `coverage_rule` 且未标 `exploratory`）；仅模块名相同的记**疑似映射**单列待确认。高优缺口按 P0→P3 置顶。
+  - **`scripts/to_excel.py`**：新增 `--with-rtm requirements.json`，把「需求追溯」写为用例 Excel 的**第二个 sheet**（状态着色：未覆盖红 / 部分覆盖黄 / 全覆盖绿，含孤儿与疑似映射区块）。
+  - **`scripts/prescreen.py`**：预审 **9 项 → 10 项**，新增第 10 项「孤儿用例」；默认 `--orphan-max 0.0`（**任何孤儿直接阻断**），`exploratory: true` 可豁免，阈值可放宽为告警。
+  - **文档**：`references/coverage_audit.md` 新增「四·五 双向追溯（RTM）与 Excel 第二 sheet」；`references/quality_prescreen.md` 更新为 10 项表并补 `--orphan-max` 示例；`SKILL.md` / `README.md` / `workflow.md` 同步口径。
+  - **新增 `scripts/selftest_rtm.py`**：覆盖 RTM 状态判定（全覆盖/部分/未覆盖/孤儿/疑似/exploratory 豁免）、Excel 第二 sheet、预审第 10 项阻断，共 16 项断言。
+
+### 修改
+
+- `SKILL.md` Step 6：导出 Excel 增加 `--with-rtm requirements.json`；覆盖率评审增加 `--rtm-xlsx <用例Excel>`。
+- 预审项数由 9 项统一更新为 10 项（`SKILL.md` / `references/quality_prescreen.md` / `references/workflow.md` / `README.md`）。
+
 ## [1.4.0] - 2026-10-22
 
 ### 新增

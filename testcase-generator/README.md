@@ -21,8 +21,9 @@ English version: [README.en.md](README.en.md)
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
 - 🎯 **四类场景配额**：每个功能点 `1 正向 : ≥3 异常·边界` 且 **≥1 条权限校验**（未登录/无权限/跨角色越权），只测顺利路径直接判场景失衡
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
-- 🛡️ **质量预审闸门（9 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额，不达标不出库
+- 🛡️ **质量预审闸门（10 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额 / **孤儿用例**，不达标不出库
 - 🔍 **覆盖率评审（逆向）**：拿已有用例库回审需求，输出**模块级**覆盖率 + 三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖）；支持 `.xlsx` 直读，专治"全局 95% 掩盖某模块 40%"（见 `references/coverage_audit.md`）
+- 🔗 **双向需求追溯（RTM）**：需求→用例（查漏测）+ 用例→需求（查孤儿），区分「全覆盖 / 部分覆盖 / 未覆盖」，可写入用例 Excel 的**第二个 sheet「需求追溯」**（`to_excel.py --with-rtm requirements.json`）
 - 📐 **实证写法模式**：从真实优秀用例库（1278 条）反推的 10 个可复制做法——双前置列分离、动词白名单、预期断言化、同构组批量产出、非功能三件套等（见 `references/excellent_case_patterns.md`）
 - 🧠 **记忆机制**：记录历史产品约束，跨会话复用
 - 📤 **多格式输出**：Excel（10 列）、XMind、Markdown 测试报告 / 测试点
@@ -65,14 +66,14 @@ testcase-generator/
 │   ├── priority_p0_p3.md     # P0–P3 分级策略（优先级口径）
 │   ├── data_rules.md         # 数据-规则映射库（测试数据校验）
 │   ├── quality_standards.md  # 4 大质量标准 + 0–100 评分 rubric
-│   ├── quality_prescreen.md  # 质量预审 9 项闸门与阈值
+│   ├── quality_prescreen.md  # 质量预审 10 项闸门与阈值
 │   ├── coverage_audit.md     # ★覆盖率评审（逆向）：模块级下钻 + G1/G2/G3 缺口
 │   ├── workflow.md           # 质量保障机制总览（四道闸门 + 技术加速器）
 │   └── memory_mechanism.md   # 记忆机制
 └── scripts/                 # 可执行脚本（10 个，Python 3.13）
     ├── extract_requirements.py  # Step1 抽取需求规则清单
     ├── map_coverage.py          # 用例↔需求规则覆盖映射
-    ├── prescreen.py             # 质量预审闸门（9 项）
+    ├── prescreen.py             # 质量预审闸门（10 项）
     ├── coverage_audit.py        # 覆盖率评审（模块级下钻 + 缺口报告）
     ├── score_testcases.py       # 质量评分
     ├── to_excel.py              # 导出 10 列 Excel（`--emit-template` 出空白模板）
@@ -136,7 +137,7 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. 覆盖映射
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. 质量预审闸门（9 项，不达标会列出缺口）
+# 4. 质量预审闸门（10 项，不达标会列出缺口）
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 

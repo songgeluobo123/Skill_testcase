@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-prescreen.py — 测试用例质量预审器（正式生成前的 9 项闸门）
+prescreen.py — 测试用例质量预审器（正式生成前的 10 项闸门）
 
 检查项（详见 references/quality_prescreen.md）：
   1. 需求覆盖率 >= coverage_min（需 --requirement-rules 提供需求规则清单）
@@ -15,6 +15,8 @@ prescreen.py — 测试用例质量预审器（正式生成前的 9 项闸门）
      缺标题或缺步骤即阻断；重名标题仅告警；用例编号重复即阻断）
   9. 场景构成配额（每功能点 1 正向 : ≥3 异常·边界·权限；模块内无异常/边界即阻断，
      负向偏少或缺权限校验仅告警）
+  10. 孤儿用例（无 coverage_rule 且未标 exploratory=true）：默认**直接阻断**；
+      可用 --orphan-max 放宽为阈值告警（如 0.1 允许 10%）
 
 退出码：
   0  —— 全部通过（或仅警告）
@@ -76,7 +78,7 @@ def norm(s):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="测试用例质量预审器（9 项闸门）")
+    ap = argparse.ArgumentParser(description="测试用例质量预审器（10 项闸门）")
     ap.add_argument("input", help="用例 JSON 文件路径")
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON（字符串数组）")
     ap.add_argument("--coverage-min", type=float, default=0.95)
@@ -86,6 +88,8 @@ def main():
     ap.add_argument("--p2-max", type=float, default=0.45)
     ap.add_argument("--scene-min-cases", type=int, default=4,
                     help="模块场景构成检查的最小用例数门槛（默认 4，少于该数不判负向缺失）")
+    ap.add_argument("--orphan-max", type=float, default=0.0,
+                    help="孤儿用例占比上限（默认 0.0：任何孤儿用例即阻断；0.1 表示允许 10%%）")
     args = ap.parse_args()
 
     try:
@@ -295,6 +299,25 @@ def main():
         warns.append(f"{len(thin_neg)} 个模块负向用例偏少（建议 1 正向 : ≥3 异常/边界）: {thin_neg[:5]}")
     if no_perm:
         warns.append(f"{len(no_perm)} 个模块无权限校验类用例: {no_perm[:5]}")
+
+    # 10. 孤儿用例（无 coverage_rule，且未标 exploratory；默认直接阻断）
+    orphans = []
+    for c in cases:
+        if str(c.get("coverage_rule", "") or "").strip():
+            continue
+        v = c.get("exploratory")
+        if v is True or str(v).strip().lower() in ("1", "true", "yes", "y"):
+            continue
+        orphans.append(str(c.get("id", "?")))
+    orphan_ratio = len(orphans) / total
+    if orphans and orphan_ratio > args.orphan_max:
+        fails.append(f"{len(orphans)} 条孤儿用例（无 coverage_rule 且未标 exploratory）"
+                     f"占比 {orphan_ratio:.0%} > 上限 {args.orphan_max:.0%}: {orphans[:10]}")
+    elif orphans:
+        warns.append(f"{len(orphans)} 条孤儿用例（占比 {orphan_ratio:.0%}，未超上限 "
+                     f"{args.orphan_max:.0%}）: {orphans[:10]}")
+    else:
+        print(f"[✓] 无孤儿用例（每条用例均有需求映射）")
 
     print()
     if fails:
