@@ -269,7 +269,7 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `map_coverage.py` — 用例 → 需求规则 ID 映射器，输出覆盖率与未覆盖规则。
 - `prescreen.py` — Step 5 质量预审闸门（10 项：覆盖率 / P0 / P2 占比 / 方法关联 / 无编造 / 无重复 / 预期可判定 / 标题规范·编号唯一 / 场景构成配额 / 孤儿用例；P0、P2、场景门槛、孤儿上限均可配，支持 6 方法）。
 - `coverage_audit.py` — Step 6 覆盖率评审（模块级下钻）：用例 `.json`/`.xlsx` × `requirements.json` → Markdown/JSON 报告，识别 G1 缺失 / G2 场景失衡 / G3 名义覆盖。
-- `mutation_audit.py` — Step 5.5 强度闸门（默认 `--mut-gate p0`，P0 规则 <90% 阻断）：用例 × `requirements.json` → 变异得分 + 零强度规则 + 零贡献用例；自动抽 TEXT/BND/NUM/NEG/DEL/ENUM 六类变异体，`--semantic` 可挂 ORD/STM/IDEM，`--explain` 逐条排查 `killer_pattern`；支持 `.xlsx` 直读。
+- `mutation_audit.py` — Step 5.5 强度闸门（默认 `--mut-gate p0`，P0 规则 <90% 阻断）：用例 × `requirements.json` → 变异得分 + 零强度规则 + 零贡献用例；自动抽 TEXT/PRI/BND/NUM/NEG/DEL/ENUM **七类**变异体，`--semantic` 可挂 ORD/STM/IDEM，`--explain` 逐条排查 `killer_pattern`；支持 `.xlsx` 直读；变异体过少的规则判「证据不足」不误伤；P0 不可测量按未验证阻断（`unmeasurable_accepted` 可登记豁免）。
 - `to_excel.py` — Step 6 用例 JSON → `.xlsx`（10 列），`--emit-template` 生成模板。
 - `to_xmind.py` — Step 6 用例 JSON → `.xmind`（可选输出）。
 - `score_testcases.py` — Step 6 结构化评分器（4 维逐项判定，任一维度 <90 触发回退）。

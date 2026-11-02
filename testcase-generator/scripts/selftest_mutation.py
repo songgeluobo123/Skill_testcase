@@ -112,9 +112,10 @@ def main():
                   f"实际 {base['valid_mutants']}")
             check("A3 全局变异得分 == 4/19 (21.1%)",
                   abs(base["overall"] - 4 / 19) < 0.001, f"实际 {base['overall']*100:.1f}%")
-            check("A4 零强度规则 == {R-102, R-103, R-201}",
-                  set(base["zero_strength_rules"]) == {"R-102", "R-103", "R-201"},
-                  str(base["zero_strength_rules"]))
+            check("A4 零强度规则 == {R-102, R-201}（R-103 仅 1 个变异体→证据不足）",
+                  set(base["zero_strength_rules"]) == {"R-102", "R-201"}
+                  and base.get("weak_evidence_rules") == ["R-103"],
+                  f"零强度 {base['zero_strength_rules']} / 证据不足 {base.get('weak_evidence_rules')}")
             check("A5 零贡献用例 == 5 条（含 TC-LOGIN-001：只验证提示文案≠锁定生效）",
                   set(base["zero_case_ids"]) == {"TC-LOGIN-001", "TC-LOGIN-003",
                                                  "TC-LOGIN-004", "TC-PAY-001",
@@ -235,6 +236,49 @@ def main():
         check("B11 无编号用例按行号区分（仅弱用例计零贡献，不被强用例连带）",
               got == ["第2行"] and nres["killed"] == 2,
               f"zero={got} killed={nres['killed'] if nres else '?'}")
+
+        # B12 NUM 反证式边界断言：实现把 3s 改成 2s 时，「未达 3s 不该播」要能杀死它
+        # （真实库原写法，上一版会误判为"杀不死"→ 好用例被打成零贡献）
+        num_rules = [{"id": "R-906", "module": "反证", "priority": "P1",
+                      "text": "热身开始：进入热身阶段3s后播报"}]
+        num_cases = [{"id": "TC-NU-001", "name": "未达3s不播", "module": "反证",
+                      "priority": "P1", "test_type": "边界", "steps": "进入热身阶段后计时",
+                      "expected": "计时未达3s时无任何热身开始播报输出",
+                      "test_data": {"x": 1}, "coverage_rule": "R-906"}]
+        nur = dump("nur.json", num_rules, td)
+        nuc = dump("nuc.json", {"cases": num_cases}, td)
+        _, nu_res, _ = run([nuc, nur], td)
+        check("B12 反证式边界断言（未达3s不播）能杀死「阈值调小」变异体",
+              nu_res is not None and nu_res["killed"] >= 1,
+              f"killed={nu_res['killed'] if nu_res else '?'}/{nu_res['valid_mutants'] if nu_res else '?'}")
+
+        # B13 NEG 变体：规则写「不允许出现」，用例写「不出现」也要能杀死
+        neg_rules = [{"id": "R-907", "module": "否定变体", "priority": "P1",
+                      "text": "本期不允许出现课程播一次加系统播一次"}]
+        neg_cases = [{"id": "TC-NG-001", "name": "仅一条", "module": "否定变体",
+                      "priority": "P1", "test_type": "功能", "steps": "同时触发课程与系统事件",
+                      "expected": "该时间点仅形成一条有效主播报，不出现课程播一次加系统播一次",
+                      "test_data": {"x": 1}, "coverage_rule": "R-907"}]
+        ngr = dump("ngr.json", neg_rules, td)
+        ngc = dump("ngc.json", {"cases": neg_cases}, td)
+        _, ng_res, _ = run([ngc, ngr], td)
+        check("B13 用例写「不出现」能杀死「不允许出现」变异体",
+              ng_res is not None and ng_res["killed"] >= 1,
+              f"killed={ng_res['killed'] if ng_res else '?'}/{ng_res['valid_mutants'] if ng_res else '?'}")
+
+        # B14 防误杀：规则复述式断言「超过5000元需验证」不得杀死「阈值改 5001」变异体
+        fk_rules = [{"id": "R-908", "module": "防误杀", "priority": "P1",
+                     "text": "单笔订单金额超过5000元需二次短信验证"}]
+        fk_cases = [{"id": "TC-FK-001", "name": "大额验证", "module": "防误杀",
+                     "priority": "P1", "test_type": "功能", "steps": "提交 6000 元订单",
+                     "expected": "超过5000元的订单应弹出短信验证弹窗",
+                     "test_data": {"金额": "6000"}, "coverage_rule": "R-908"}]
+        fkr = dump("fkr.json", fk_rules, td)
+        fkc = dump("fkc.json", {"cases": fk_cases}, td)
+        _, fk_res, _ = run([fkc, fkr], td)
+        check("B14 规则复述式断言不得误杀「阈值微调」变异体",
+              fk_res is not None and fk_res["killed"] < fk_res["valid_mutants"],
+              f"killed={fk_res['killed'] if fk_res else '?'}/{fk_res['valid_mutants'] if fk_res else '?'}")
 
     print("-" * 60)
     print(f"通过 {len(PASS)} / {len(PASS)+len(FAIL)}")

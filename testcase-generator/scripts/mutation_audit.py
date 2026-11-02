@@ -53,11 +53,12 @@ from datetime import datetime
 DEFAULT_MUT_MIN = 0.70          # 全局变异得分达标线
 DEFAULT_P0_MUT_MIN = 0.90       # P0 规则达标线
 DEFAULT_MAX_PER_RULE = 6        # 每条规则最多自动生成多少个变异体
+DEFAULT_MIN_MUTANTS_FOR_ZERO = 2  # 变异体少于该数的规则判「证据不足」，不判零强度
 
 # 每算子配额（先保证"错误类型"的多样性，再谈数量）：
 # 若只按总量截断，一条含两个数字的规则会被 4 个 NUM 变异体占满，
 # 关键的"否定翻转/动作漏做"变异体根本不会生成——那等于自己把检出能力砍掉一半。
-OPERATOR_CAP = {"TEXT": 2, "BND": 2, "NUM": 2, "NEG": 1, "DEL": 1, "ENUM": 1,
+OPERATOR_CAP = {"TEXT": 2, "PRI": 2, "BND": 2, "NUM": 2, "NEG": 1, "DEL": 1, "ENUM": 1,
                 "ORD": 1, "STM": 1, "IDEM": 1}
 
 # ---------------------------------------------------------------- 算子素材
@@ -118,6 +119,7 @@ ACTION_KILLERS = {
     "置灰": r"置灰|不可点击|禁用|disabled",
     "隐藏": r"隐藏|不展示|不可见|不显示",
     "锁定": r"(?:仍|继续|依旧|再次).{0,10}(锁定|无法登录|不可登录)|锁定(?:中|状态|生效)|账号.{0,4}(冻结|封禁)",
+    "打断": r"(?:P0|安全).{0,10}(打断|抢占|中断)|(?:打断|抢占).{0,8}(正在播放|低优先级|P2|P3)",
     "重置": r"重置|清零|恢复默认",
     "拒绝": r"拒绝|拦截|驳回|不允许",
     "删除": r"删除|清除|移除",
@@ -129,11 +131,16 @@ ENUM_RETURN_RE = re.compile(
     r"(?:返回|展示|显示|给出|进入)(?:默认|热门|推荐|全部|最近)(?:的)?([\u4e00-\u9fa5]{2,8})")
 ENUM_SPLIT_RE = re.compile(r"([\u4e00-\u9fa5A-Za-z0-9]{1,10})、([\u4e00-\u9fa5A-Za-z0-9]{1,10})")
 
-OPERATOR_ORDER = {"TEXT": 0, "BND": 1, "NUM": 2, "NEG": 3, "DEL": 4, "ENUM": 5,
-                  "ORD": 6, "STM": 7, "IDEM": 8}
+# 优先级序关系（PRI）："P0 > P1" 这类矩阵规则既没有数值单位、也没有否定词，
+# 只能靠序关系派生变异体——否则"优先级仲裁"这种最关键的规则会被判"不可测量"。
+PRI_RE = re.compile(r"(P[0-4])\s*[>＞]\s*(P[0-4])")
+
+OPERATOR_ORDER = {"TEXT": 0, "PRI": 1, "BND": 2, "NUM": 3, "NEG": 4, "DEL": 5, "ENUM": 6,
+                  "ORD": 7, "STM": 8, "IDEM": 9}
 OPERATOR_NAME = {
     "NUM": "数值", "BND": "边界方向", "NEG": "否定翻转", "DEL": "动作删除",
-    "ENUM": "枚举", "TEXT": "逐字文案", "ORD": "顺序", "STM": "状态迁移", "IDEM": "幂等",
+    "ENUM": "枚举", "TEXT": "逐字文案", "PRI": "优先级序",
+    "ORD": "顺序", "STM": "状态迁移", "IDEM": "幂等",
 }
 
 # 非功能类用例不参与"零贡献"判定（杀不死功能变异体属正常）
@@ -216,6 +223,14 @@ def _mid(rid, op, seq):
     return f"M-{safe}-{op}-{seq}"
 
 
+def _unit_pat(unit):
+    """单位匹配：中文单位允许同时匹配常见英文写法（秒/s、毫秒/ms、分钟/min）。"""
+    alias = {"秒": "s", "分钟": "min", "毫秒": "ms", "小时": "h"}.get(unit)
+    if alias:
+        return rf"(?:\s*{re.escape(unit)}|\s*{alias})?"
+    return rf"\s*{re.escape(unit)}?"
+
+
 def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None):
     """从规则文本自动抽取确定性变异体（NUM/BND/NEG/DEL/ENUM）。"""
     rid = rule["id"]
@@ -235,6 +250,17 @@ def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None
             "source_span": m.group(0),
             "wrong_claim": f"固定文案「{core}」被改动（错字 / 改写 / 漏句）",
             "killer_pattern": re.escape(core),
+        })
+
+    # PRI —— 优先级序关系（P0 > P1 写反）
+    for m in PRI_RE.finditer(text):
+        hi, lo = m.group(1), m.group(2)
+        cands.append({
+            "rule_id": rid, "operator": "PRI",
+            "source_span": m.group(0),
+            "wrong_claim": f"优先级序关系「{hi} > {lo}」被写反",
+            "killer_pattern": (rf"(?:{hi}|安全).{{0,12}}(?:优先|高于|打断|抢占|覆盖)"
+                               rf"|{lo}.{{0,8}}被.{{0,8}}(?:{hi}|打断|抢占)"),
         })
 
     # BND —— 边界方向（优先级最高：差一错误的主要来源，Guru99 要求测每个极限两侧）
@@ -280,11 +306,29 @@ def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None
                 continue
             nv = round(base + d, 4)          # 防 8.3 - 1 = 7.300000000000001 这类浮点噪声
             nv_s = str(int(nv)) if nv == int(nv) else ("%g" % nv)
+            # 允许小数邻域：变异值 89 时，用例写「89.8%」正是能区分 89 与 90 的断言
+            # （真实库习惯用 90.9% / 89.8% / 95.2% 表达"刚好越过/刚好不到"）。
+            # 不加 (?:\.\d+)? 会把这类边界用例全部漏判成"杀不死"。
+            nv_pat = rf"{re.escape(nv_s)}(?:\.\d+)?"
+            v_pat = rf"{re.escape(value)}(?:\.\d+)?"
+            alt = []
+            up = _unit_pat(unit)
+            if d < 0:
+                # 阈值被调小（更早触发）→ 「未达 V 就不该发生」这类反证式边界断言能杀死它。
+                # 例：实现把 3s 改成 2s，「计时未达 3s 时无任何播报」会失败。
+                alt.append(rf"(?:未达|不足|未满|小于|低于|少于)\s*{v_pat}{up}"
+                           rf"[^。；]{{0,16}}(?:不|无|未有|静默|不播)")
+            else:
+                # 阈值被调大（更晚触发）→ 上界断言「不超过 V」或边界点正证「达到 V 应播」能杀死它。
+                alt.append(rf"(?:不超过|未超过|最多|不大于)\s*{v_pat}{up}")
+                alt.append(rf"(?:达到|恰好|刚好|正好)\s*{v_pat}{up}"
+                           rf"[^。；]{{0,16}}(?:应|播|触发|执行|生效|提示|报警)")
             cands.append({
                 "rule_id": rid, "operator": "NUM",
                 "source_span": f"{value}{unit}",
                 "wrong_claim": f"阈值/数量「{value}{unit}」被写成「{nv_s}{unit}」",
-                "killer_pattern": rf"{re.escape(nv_s)}\s*{re.escape(unit)}",
+                "killer_pattern": rf"{nv_pat}\s*{re.escape(unit)}",
+                "alt_patterns": alt,
             })
 
     # NEG —— 否定翻转
@@ -295,7 +339,11 @@ def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None
             if not core:
                 continue
             core_s = core.group(0)
-            syn = NEG_SYNONYM.get(word, (word,))
+            syn = list(NEG_SYNONYM.get(word, (word,)))
+            # 真实用例写「不出现 / 未触发 / 无重复」的情况远多于「不允许出现」，
+            # 只认否定词表会把这些强用例判成"杀不死"。强禁止类额外接受 不/未/无/没有。
+            if word in ("不可", "不允许", "禁止", "不得") and len(core_s) >= 2:
+                syn += ["不", "未", "无", "没有"]
             killer = "(?:" + "|".join(re.escape(s) for s in syn) + ")" + re.escape(core_s)
             cands.append({
                 "rule_id": rid, "operator": "NEG",
@@ -436,7 +484,7 @@ def build_entries(cases):
 def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
           ignore_ids=None, scope="expected", p0_mut_min=DEFAULT_P0_MUT_MIN,
           mut_min=DEFAULT_MUT_MIN, rule_floor_block=0.0, rule_filter=None,
-          operators=None):
+          operators=None, min_mutants_for_zero=DEFAULT_MIN_MUTANTS_FOR_ZERO):
     ignore_ids = set(ignore_ids or [])
     rule_by_id = {r["id"]: r for r in rules}
     rules_used = [r for r in rules if not rule_filter or r["id"] in rule_filter]
@@ -458,13 +506,20 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     kill_map = {m["mid"]: [] for m in valid}
     case_kills = {key: [] for key, _, _ in entries}
     for m in valid:
-        try:
-            rx = re.compile(m["killer_pattern"])
-        except re.error:
+        rxs = []
+        for p in [m.get("killer_pattern")] + list(m.get("alt_patterns") or []):
+            if not p:
+                continue
+            try:
+                rxs.append(re.compile(p))
+            except re.error:
+                continue
+        if not rxs:
             m["bad_pattern"] = True
             continue
         for key, disp, c in entries:
-            if rx.search(case_expected(c, scope)):
+            text = case_expected(c, scope)
+            if any(rx.search(text) for rx in rxs):
                 kill_map[m["mid"]].append(disp)
                 case_kills[key].append(m["mid"])
 
@@ -489,6 +544,11 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
         status = "OK"
         if score is None:
             status = "不可测量"
+        elif len(rms) < min_mutants_for_zero and not killed:
+            # 证据不足：只有 1 个变异体且一个都没杀死——说明不了整条规则弱，
+            # 只说明这一个错法没被测到（典型是表格/矩阵型规则，整表行为可能已有覆盖）。
+            # 但若这 1 个已经被杀死，就不能算"证据不足"了，至少证明有强度。
+            status = "证据不足"
         elif score <= rule_floor_block:
             status = "零强度"
         elif prio == "P0" and score < p0_mut_min:
@@ -500,6 +560,7 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
             "id": rid, "module": r.get("module", ""), "priority": prio,
             "text": r.get("text", ""), "mutants": len(rms), "killed": len(killed),
             "score": score, "status": status,
+            "accepted": bool(r.get("unmeasurable_accepted") or r.get("accepted")),
             "survivors": [{"mid": m["mid"], "operator": m["operator"],
                            "wrong_claim": m["wrong_claim"],
                            "killer_pattern": m["killer_pattern"]}
@@ -514,7 +575,8 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     overall = (total_killed / total_valid) if total_valid else 0.0
     unmeasurable = [x for x in rule_rows if x["score"] is None]
     zero = [x for x in rule_rows if x["status"] == "零强度"]
-    p0_rules = [x for x in scored if x["priority"] == "P0"]
+    weak_evidence = [x for x in rule_rows if x["status"] == "证据不足"]
+    p0_rules = [x for x in rule_rows if x["priority"] == "P0"]
 
     # 6) 零贡献用例（仅限评估范围内的功能类用例；非功能类豁免）
     rule_ids = {x["id"] for x in rule_rows}
@@ -536,6 +598,12 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     fails, p0_fails = [], []
     if overall < mut_min:
         fails.append(f"全局变异得分 {overall*100:.1f}% < {mut_min*100:.0f}%")
+    for x in rule_rows:
+        # P0 不可测量 = 未验证。P0 是发布门禁，不允许"测不了"就默认过关。
+        if x["priority"] == "P0" and x["score"] is None and not x["accepted"]:
+            msg = f"{x['id']} 为 P0 但不可测量（规则抽不出判别要素＝未验证）"
+            fails.append(msg)
+            p0_fails.append(msg)
     for x in scored:
         if x["status"] == "P0 不达标":
             msg = f"{x['id']} 得分 {x['score']*100:.0f}%（P0 规则低于 {p0_mut_min*100:.0f}%）"
@@ -546,16 +614,20 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
             fails.append(msg)
             if x["priority"] == "P0":
                 p0_fails.append(msg)
+        elif x["status"] == "证据不足":
+            fails.append(f"{x['id']} 证据不足（仅 {x['mutants']} 个变异体，0 杀不足以判定）")
 
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "overall": overall, "mut_min": mut_min, "p0_mut_min": p0_mut_min,
+        "min_mutants_for_zero": min_mutants_for_zero,
         "total_rules": len(rule_rows), "scored_rules": len(scored),
         "total_mutants": len(mutants), "valid_mutants": len(valid),
         "ignored_mutants": len(mutants) - len(valid),
         "killed": total_killed,
         "total_cases": len(cases), "scoped_cases": len(scoped),
         "rules": rule_rows, "unmeasurable": unmeasurable, "zero_strength": zero,
+        "weak_evidence": weak_evidence,
         "zero_cases": zero_cases, "case_kills": case_kills,
         "mutants": valid, "kill_map": kill_map, "fails": fails,
         "p0_fails": p0_fails, "p0_rules": len(p0_rules),
@@ -633,6 +705,22 @@ def render_markdown(res, cases_path, reqs_path, scope="expected"):
             a(f"| {x['id']} | {x['priority'] or '—'} | {_pct(x['score'])} | {surv} |")
         a("")
 
+    a("## 三·五、证据不足（变异体过少，不作为结论）")
+    a("")
+    if not res.get("weak_evidence"):
+        a("- 无。")
+    else:
+        a(f"> 这些规则只抽到 <{res.get('min_mutants_for_zero', 2)} 个变异体，0 杀**不能**说明整条规则弱，")
+        a("> 只说明这一个错法没被测到。典型是「表格/矩阵型」规则——整表行为可能已有覆盖。")
+        a("> 处理：补 `--semantic` 语义变异体后再判，或人工确认（不要据此删用例）。")
+        a("")
+        a("| 规则 | 优先级 | 变异体 | 存活的那一个错法 |")
+        a("|---|---|---|---|")
+        for x in res["weak_evidence"]:
+            surv = "；".join(s["wrong_claim"] for s in x["survivors"][:1]) or "—"
+            a(f"| {x['id']} | {x['priority'] or '—'} | {x['mutants']} | {surv} |")
+        a("")
+
     a("## 四、零贡献用例（可合并 / 可补断言）")
     a("")
     if not res.get("scoped_cases"):
@@ -675,7 +763,10 @@ def render_markdown(res, cases_path, reqs_path, scope="expected"):
         a("> 回推 Step 1 的 H1（禁止假设）：先把需求写具体，再谈用例。")
         a("")
         for x in res["unmeasurable"]:
-            a(f"- `{x['id']}` [{x['module'] or '未分模块'}] {x['text']}")
+            mark = "　`已豁免`（unmeasurable_accepted）" if x.get("accepted") else ""
+            a(f"- `{x['id']}` [{x['module'] or '未分模块'}] {x['text']}{mark}")
+        a("")
+        a("> P0 规则若不可测量，**按未验证处理并阻断**；确实无法测的，在需求里加 `\"unmeasurable_accepted\": true` 登记豁免（须在检查点②说明理由）。")
         a("")
         a("")
 
@@ -710,6 +801,7 @@ def render_json(res):
         "pass": res["pass"], "fails": res["fails"],
         "rules": [clean(x) for x in res["rules"]],
         "zero_strength_rules": [x["id"] for x in res["zero_strength"]],
+        "weak_evidence_rules": [x["id"] for x in res["weak_evidence"]],
         "unmeasurable_rules": [x["id"] for x in res["unmeasurable"]],
         "zero_case_ids": [z["id"] for z in res["zero_cases"]],
     }, ensure_ascii=False, indent=2)
@@ -735,6 +827,9 @@ def main():
                          "block 任何不达标都阻断 / off 不判定")
     ap.add_argument("--max-per-rule", type=int, default=DEFAULT_MAX_PER_RULE,
                     help=f"每条规则自动生成变异体上限（默认 {DEFAULT_MAX_PER_RULE}）")
+    ap.add_argument("--min-mutants-for-zero", type=int, default=DEFAULT_MIN_MUTANTS_FOR_ZERO,
+                    help="变异体少于该数的规则判「证据不足」，不算零强度（默认 "
+                         f"{DEFAULT_MIN_MUTANTS_FOR_ZERO}；设 1 则回到「有一个变异体算一个」）")
     ap.add_argument("--match-scope", choices=["expected", "expected+steps"], default="expected",
                     help="杀死判定的文本范围（默认 expected，避免 steps 里的枚举动作造成假杀死）")
     ap.add_argument("--semantic", metavar="PATH", help="语义变异体 JSON（ORD/STM/IDEM，可选）")
@@ -772,7 +867,7 @@ def main():
                 p0_mut_min=args.p0_mut_min, mut_min=args.mut_min,
                 rule_floor_block=args.rule_floor_block,
                 rule_filter=set(args.rule) if args.rule else None,
-                operators=ops)
+                operators=ops, min_mutants_for_zero=args.min_mutants_for_zero)
 
     if args.explain:
         print("=" * 78)
