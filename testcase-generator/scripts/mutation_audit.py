@@ -751,7 +751,10 @@ def render_markdown(res, cases_path, reqs_path, scope="expected"):
         a("| 规则 | 能测出错的用例 | 处理 |")
         a("|---|---|---|")
         for x in unmapped:
-            a(f"| {x['id']} | {'、'.join(x['unmapped_killers'])} | 补 `coverage_rule` 或复核是否误挂 |")
+            ks = x["unmapped_killers"]
+            shown = "、".join(ks[:5])
+            more = f" 等 {len(ks)} 条" if len(ks) > 5 else ""
+            a(f"| {x['id']} | {shown}{more} | 补 `coverage_rule` 或复核是否误挂 |")
         a("")
 
     a("## 五、不可测量规则（无法生成变异体）")
