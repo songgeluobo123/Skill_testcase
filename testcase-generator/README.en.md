@@ -23,6 +23,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
 - 🛡️ **Quality prescreen gate (9 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota — fails the gate, no release
 - 🔍 **Coverage audit (reverse direction)**: review an existing case library against requirements and produce **module-level** coverage plus three gap types (G1 missing / G2 imbalanced scenarios / G3 nominal coverage); reads `.xlsx` directly (see `references/coverage_audit.md`)
+- 🧪 **Strength gate (blocks on P0 by default)**: requirement-level mutation — if the requirement were implemented wrongly (off-by-one threshold / inverted boundary / dropped negation / skipped action / reworded copy), would this case go red? Emits a **zero-strength rules / zero-contribution cases** list; **P0 rules must reach 90%** (P1–P3 warn only; `--mut-gate warn` switches to report-only). Prescreen only guarantees structure; strength is covered by `scripts/mutation_audit.py` (see `references/mutation_review.md`)
 - 📐 **Evidence-based writing patterns**: 10 reproducible practices reverse-engineered from a real high-quality case library (1,278 cases) — split environment/precondition columns, verb whitelist, assertion-style expected results, isomorphic groups, non-functional triad (see `references/excellent_case_patterns.md`)
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
@@ -67,13 +68,15 @@ testcase-generator/
 │   ├── quality_standards.md  # 4 quality standards + 0–100 scoring rubric
 │   ├── quality_prescreen.md  # Quality prescreen 9 gates & thresholds
 │   ├── coverage_audit.md     # ★ coverage audit (reverse): module drill-down + G1/G2/G3 gaps
-│   ├── workflow.md           # Quality-assurance overview (four gates + accelerators)
+│   ├── mutation_review.md    # ★ strength gate (P0 blocking): requirement-level mutation + killer_pattern spec
+│   ├── workflow.md           # Quality-assurance overview (five gates + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (10, Python 3.13)
+└── scripts/                 # Executable scripts (11, Python 3.13)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
     ├── prescreen.py             # Quality prescreen gate (9 checks)
     ├── coverage_audit.py        # Coverage audit (module drill-down + gap report)
+    ├── mutation_audit.py        # Strength audit (requirement-level mutation, experimental, warn by default)
     ├── score_testcases.py       # Quality scoring
     ├── to_excel.py              # Export 10-column Excel (`--emit-template` for blank template)
     ├── to_xmind.py              # Export XMind
@@ -92,7 +95,7 @@ testcase-generator/
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
 | **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
 | **D. Data rules** | `data_rules.md` | Test-data validation mapping only |
-| **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `coverage_audit.md`, `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, coverage audit (module drill-down), mechanism overview, memory |
+| **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `coverage_audit.md`, `mutation_review.md` (strength gate), `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, coverage audit (module drill-down), strength audit (requirement-level mutation), mechanism overview, memory |
 
 > **Boundary rule: each rule is defined exactly once (single source of truth).** `case_design.md` is the sole authority for case authoring; the priority model lives only in `priority_p0_p3.md` (P0–P3, sole authority); the scoring rubric lives only in `quality_standards.md`; data validation only in `data_rules.md`. Cross-references use "see xxx" instead of copying rules.
 
