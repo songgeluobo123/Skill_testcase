@@ -107,11 +107,16 @@ NEG_SYNONYM = {
 }
 
 # 动作删除（DEL）：动作词 → 该动作"做成了"的可观测证据（killer 模板）
-# 设计铁律：killer 必须是**结果态**，不能是动作名本身。
-# 反例（已修）：`锁定` 曾写成 `锁定|冻结|封禁`，于是"应提示账号已锁定"这种只验证提示文案的
-# 弱用例也能"杀死"它——但提示弹出≠锁定生效，这正是最典型的假杀死。现在要求"仍锁定/锁定中/状态"。
+# 设计铁律：killer 必须是**结果态**，不能是动作名本身；且若规则里有明确主体
+# （麦克风/输入框/库存…），killer 会被加上主体约束——否则「置灰」会命中任何
+# "按钮置灰"的无关用例，得分虚高（真实库实测：47 条无关用例被判成杀手）。
+SUBJECT_HINTS = ["麦克风", "摄像头", "输入框", "顶部图标", "图标", "播报",
+                 "队列", "订单", "库存", "录音", "进度", "弹窗"]
+# 只对这些"通用结果词"注入主体约束；其余动作（释放/回跳/关闭/打断/录音…）的 killer
+# 模板本身已带语境，再注入会串味（实测：给「关闭」注入「麦克风」会得到"麦克风…订单已关闭"）。
+GENERIC_ACTIONS = {"置灰", "隐藏", "清零", "重置", "禁用"}
 ACTION_KILLERS = {
-    "关闭": r"订单.{0,4}(已关闭|状态.{0,4}关闭)|已取消|取消成功",
+    "关闭": r"(?:弹窗|页面|列表|订单|记录|入口).{0,6}(关闭|消失|收起|退出)|已关闭|关闭成功|已取消",
     "释放": r"库存.{0,6}(释放|恢复|回滚|归还|增加)|(释放|恢复|回滚|归还).{0,6}库存",
     "回跳": r"回跳|返回原|回到.{0,8}(页|详情)|原访问地址",
     "截断": r"截断|保留前\s*\d|仅保留|只保留",
@@ -120,6 +125,8 @@ ACTION_KILLERS = {
     "隐藏": r"隐藏|不展示|不可见|不显示",
     "锁定": r"(?:仍|继续|依旧|再次).{0,10}(锁定|无法登录|不可登录)|锁定(?:中|状态|生效)|账号.{0,4}(冻结|封禁)",
     "打断": r"(?:P0|安全).{0,10}(打断|抢占|中断)|(?:打断|抢占).{0,8}(正在播放|低优先级|P2|P3)",
+    "录音": r"录音(?:中|状态|态)|开始录音|进入录音|采集中|正在听|倾听中|语音输入.{0,6}(可用|激活)",
+    "采集": r"预览区.{0,10}(实时|画面|更新)|采集画面|实时画面|画面.{0,6}(实时更新|刷新)",
     "重置": r"重置|清零|恢复默认",
     "拒绝": r"拒绝|拦截|驳回|不允许",
     "删除": r"删除|清除|移除",
@@ -354,14 +361,21 @@ def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None
             break   # 同一否定词只取第一处，控制数量
 
     # DEL —— 动作删除
+    subj = next((s for s in SUBJECT_HINTS if s in text), "")
     for act, killer in ACTION_KILLERS.items():
-        if act in text:
-            cands.append({
-                "rule_id": rid, "operator": "DEL",
-                "source_span": act,
-                "wrong_claim": f"「{act}」这个动作被漏做（只改了状态/只给了提示）",
-                "killer_pattern": killer,
-            })
+        if act not in text:
+            continue
+        k = killer
+        # 主体约束：把"置灰/禁用"这类通用结果词绑定到规则里的主体，避免命中无关用例。
+        # 动作词本身与主体同名时（如规则写"录音"）不注入，否则 pattern 会变成同义反复。
+        if act in GENERIC_ACTIONS and subj and subj != act and subj not in killer:
+            k = rf"(?:{subj}.{{0,12}}(?:{killer})|(?:{killer}).{{0,12}}{subj})"
+        cands.append({
+            "rule_id": rid, "operator": "DEL",
+            "source_span": act,
+            "wrong_claim": f"「{act}」这个动作被漏做（只改了状态/只给了提示）",
+            "killer_pattern": k,
+        })
 
     # ENUM —— 返回值替换 / 并列项删项
     m = ENUM_RETURN_RE.search(text)
@@ -501,8 +515,12 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
         m["ignored"] = m["mid"] in ignore_ids
     valid = [m for m in mutants if not m["ignored"]]
 
-    # 3) 杀死判定：kill 只看 expected（不看 steps），且全库匹配
+    # 3) 杀死判定：只看 expected；且**只在评估范围内判定**
+    # 范围外用例（别的功能模块）即便文本碰巧命中也只是"跨功能相似"，不是这条需求被覆盖的证据。
     entries = build_entries(cases)
+    rule_ids = {r["id"] for r in rules_used}
+    rule_mods = {norm_mod(r.get("module")) for r in rules_used} - {""}
+    scoped_entries = [(k, d, c) for k, d, c in entries if in_scope(c, rule_ids, rule_mods)]
     kill_map = {m["mid"]: [] for m in valid}
     case_kills = {key: [] for key, _, _ in entries}
     for m in valid:
@@ -517,7 +535,7 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
         if not rxs:
             m["bad_pattern"] = True
             continue
-        for key, disp, c in entries:
+        for key, disp, c in scoped_entries:
             text = case_expected(c, scope)
             if any(rx.search(text) for rx in rxs):
                 kill_map[m["mid"]].append(disp)
@@ -579,10 +597,7 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     p0_rules = [x for x in rule_rows if x["priority"] == "P0"]
 
     # 6) 零贡献用例（仅限评估范围内的功能类用例；非功能类豁免）
-    rule_ids = {x["id"] for x in rule_rows}
-    rule_mods = {norm_mod(r.get("module")) for r in rules_used} - {""}
-    scoped = [(key, disp, c) for key, disp, c in entries
-              if in_scope(c, rule_ids, rule_mods)]
+    scoped = scoped_entries
     zero_cases = []
     for key, disp, c in scoped:
         ttype = str(c.get("test_type") or c.get("测试类型") or "")
