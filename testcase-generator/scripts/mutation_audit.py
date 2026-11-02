@@ -272,10 +272,14 @@ def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None
         nums.append((value, unit, base))
     for delta in (-1, 1):
         for value, unit, base in nums:
-            if base + delta <= 0:
+            # 步长按单位量级来定：毫秒级用 ±1ms 等于没测（没人会把 800ms 写成 799ms），
+            # 计数/时长类才用 ±1。
+            step = 100 if unit == "毫秒" else 1
+            d = delta * step
+            if base + d <= 0:
                 continue
-            nv = base + delta
-            nv_s = str(int(nv)) if nv == int(nv) else str(nv)
+            nv = round(base + d, 4)          # 防 8.3 - 1 = 7.300000000000001 这类浮点噪声
+            nv_s = str(int(nv)) if nv == int(nv) else ("%g" % nv)
             cands.append({
                 "rule_id": rid, "operator": "NUM",
                 "source_span": f"{value}{unit}",
@@ -323,13 +327,17 @@ def gen_mutants_for_rule(rule, max_per_rule=DEFAULT_MAX_PER_RULE, operators=None
         })
     m = ENUM_SPLIT_RE.search(text)
     if m:
-        last = m.group(2)
-        cands.append({
-            "rule_id": rid, "operator": "ENUM",
-            "source_span": m.group(0),
-            "wrong_claim": f"并列项中的「{last}」被漏掉",
-            "killer_pattern": re.escape(last),
-        })
+        left, right = m.group(1), m.group(2)
+        # 只认"短并列项"。若切出来的是一整句/带连接词（如「本地、云端和课程口播之间的」），
+        # 那不是并列枚举，杀掉它也没有业务含义——宁可不生成。
+        bad = ("和", "与", "及", "或", "的", "，", "。")
+        if len(right) <= 8 and len(left) <= 8 and not any(b in right for b in bad):
+            cands.append({
+                "rule_id": rid, "operator": "ENUM",
+                "source_span": m.group(0),
+                "wrong_claim": f"并列项中的「{right}」被漏掉",
+                "killer_pattern": re.escape(right),
+            })
 
     # 去重 → 按算子优先级排序 → 每算子配额 → 总量截断
     seen, uniq = set(), []
@@ -408,6 +416,23 @@ def in_scope(c, rule_ids, rule_mods):
     return any(cm in rm or rm in cm for rm in rule_mods)
 
 
+def build_entries(cases):
+    """为每条用例生成稳定且唯一的键。
+
+    真实用例库常常没有「用例编号」列（如 AI Coach 2405 条的表只有标题）。
+    若全部回落到同一个 "(无编号)"，杀死统计会互相覆盖——一条用例杀死了变异体，
+    等于所有用例都杀死了，得分虚高且零贡献清单失效。没有编号时用 Excel 行号兜底。
+    """
+    out, seen = [], {}
+    for i, c in enumerate(cases, 2):          # Excel 数据从第 2 行开始
+        cid = str(c.get("id") or c.get("用例编号") or "").strip()
+        disp = cid or f"第{i}行"
+        n = seen.get(disp, 0)
+        seen[disp] = n + 1
+        out.append((disp if n == 0 else f"{disp}#{n+1}", disp, c))
+    return out
+
+
 def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
           ignore_ids=None, scope="expected", p0_mut_min=DEFAULT_P0_MUT_MIN,
           mut_min=DEFAULT_MUT_MIN, rule_floor_block=0.0, rule_filter=None,
@@ -429,19 +454,19 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     valid = [m for m in mutants if not m["ignored"]]
 
     # 3) 杀死判定：kill 只看 expected（不看 steps），且全库匹配
+    entries = build_entries(cases)
     kill_map = {m["mid"]: [] for m in valid}
-    case_kills = {str(c.get("id") or c.get("用例编号") or "(无编号)"): [] for c in cases}
+    case_kills = {key: [] for key, _, _ in entries}
     for m in valid:
         try:
             rx = re.compile(m["killer_pattern"])
         except re.error:
             m["bad_pattern"] = True
             continue
-        for c in cases:
-            cid = str(c.get("id") or c.get("用例编号") or "(无编号)")
+        for key, disp, c in entries:
             if rx.search(case_expected(c, scope)):
-                kill_map[m["mid"]].append(cid)
-                case_kills[cid].append(m["mid"])
+                kill_map[m["mid"]].append(disp)
+                case_kills[key].append(m["mid"])
 
     # 4) 逐规则汇总
     rule_rows = []
@@ -456,10 +481,9 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
 
         # 杀死者是否已挂到该规则（未挂 = 用例有强度但 RTM 缺映射）
         mapped = set()
-        for c in cases:
-            for t in str(c.get("coverage_rule", "")).split(";"):
-                if t.strip() == rid:
-                    mapped.add(str(c.get("id") or c.get("用例编号") or "(无编号)"))
+        for key, disp, c in entries:
+            if rid in case_rule_ids(c):
+                mapped.add(disp)
         unmapped_killers = sorted({c for m in killed for c in kill_map[m["mid"]]} - mapped)
 
         status = "OK"
@@ -495,15 +519,15 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     # 6) 零贡献用例（仅限评估范围内的功能类用例；非功能类豁免）
     rule_ids = {x["id"] for x in rule_rows}
     rule_mods = {norm_mod(r.get("module")) for r in rules_used} - {""}
-    scoped = [c for c in cases if in_scope(c, rule_ids, rule_mods)]
+    scoped = [(key, disp, c) for key, disp, c in entries
+              if in_scope(c, rule_ids, rule_mods)]
     zero_cases = []
-    for c in scoped:
-        cid = str(c.get("id") or c.get("用例编号") or "(无编号)")
+    for key, disp, c in scoped:
         ttype = str(c.get("test_type") or c.get("测试类型") or "")
         if any(k in ttype for k in NONFUNC_TYPES):
             continue
-        if not case_kills.get(cid):
-            zero_cases.append({"id": cid,
+        if not case_kills.get(key):
+            zero_cases.append({"id": disp,
                                "name": c.get("name") or c.get("title") or c.get("用例名称", ""),
                                "module": c.get("module") or c.get("测试模块", ""),
                                "expected": case_expected(c, "expected")[:80]})

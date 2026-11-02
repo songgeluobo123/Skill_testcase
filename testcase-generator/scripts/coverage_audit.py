@@ -98,10 +98,21 @@ def _load_cases_xlsx(path):
     header = [str(v or "").strip() for v in rows[0]]
     idx = {}
     for key, aliases in HEADER_ALIASES.items():
+        # 先精确匹配，再退回包含匹配。
+        # 关键坑：真实库常同时有「顶级功能模块」和「功能模块」，若直接按包含匹配，
+        # 前者会先命中并把 module 抢走——模块级覆盖率与评估范围就都错在这一列上。
+        hit = None
         for i, h in enumerate(header):
-            if h and any(a.lower() == h.lower() or a in h for a in aliases):
-                idx[key] = i
+            if h and any(a.lower() == h.lower() for a in aliases):
+                hit = i
                 break
+        if hit is None:
+            cands = [(len(h), i) for i, h in enumerate(header)
+                     if h and any(a.lower() in h.lower() for a in aliases)]
+            if cands:
+                hit = min(cands)[1]        # 同义表头里取最短的（更具体），避免大粒度列抢占
+        if hit is not None:
+            idx[key] = hit
     if "module" not in idx or "title" not in idx:
         raise ValueError(f"未能识别「测试模块 / 用例名称」列，实际表头: {header}")
 

@@ -218,6 +218,24 @@ def main():
               vres is not None and vres["unmeasurable_rules"] == ["R-902"],
               str(vres["unmeasurable_rules"] if vres else "?"))
 
+        # B11 无「用例编号」列时：每行必须有独立键，不能全部塌成同一个 "(无编号)"
+        # （真实库 2405 条无编号，塌键会让"一条杀死"变成"全部杀死"，得分虚高且零贡献失效）
+        noid = [{"id": "", "name": "弱", "module": "无编号", "priority": "P1",
+                 "test_type": "异常", "steps": "输错5次", "expected": "应提示账号已锁定",
+                 "test_data": {"x": 1}, "coverage_rule": "R-905"},
+                {"id": "", "name": "强", "module": "无编号", "priority": "P1",
+                 "test_type": "边界", "steps": "第4次输错",
+                 "expected": "第4次输错后应仍停留在登录页且不出现锁定提示",
+                 "test_data": {"x": 2}, "coverage_rule": "R-905"}]
+        nr = dump("nr.json", [{"id": "R-905", "module": "无编号", "priority": "P1",
+                              "text": "密码错误5次锁定10分钟"}], td)
+        nc = dump("nc.json", {"cases": noid}, td)
+        _, nres, _ = run([nc, nr], td)
+        got = (nres or {}).get("zero_case_ids", [])
+        check("B11 无编号用例按行号区分（仅弱用例计零贡献，不被强用例连带）",
+              got == ["第2行"] and nres["killed"] == 2,
+              f"zero={got} killed={nres['killed'] if nres else '?'}")
+
     print("-" * 60)
     print(f"通过 {len(PASS)} / {len(PASS)+len(FAIL)}")
     if FAIL:
