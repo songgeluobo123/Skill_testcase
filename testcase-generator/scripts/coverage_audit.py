@@ -66,6 +66,7 @@ HEADER_ALIASES = {
     "precondition": ["前置条件", "前置", "precondition"],
     "steps": ["测试步骤", "步骤", "操作步骤", "steps"],
     "expected": ["预期结果", "预期", "expected"],
+    "coverage_rule": ["coverage_rule", "coverage", "需求规则", "规则id", "规则ID"],
 }
 
 
