@@ -50,7 +50,7 @@
 | **L1** | 表头必需列齐全（字段 / 类-边界点 / 类别 / 用例 ID） | 阻断（退出码 2） |
 | **L1b** | 每行列数 ≥ 表头所需列数 | **阻断**——少一列会整体错位，静默误判比报错更危险 |
 | **L2** | 数值/枚举类字段的边界点数 ≥ `--min-boundary`（默认 3） | 阻断 |
-| **L3** | 每行「用例 ID」非空 | 阻断（未消费等价类） |
+| **L3** | 每行「用例 ID」非空 | **仅 `--stage full` 阻断**（未消费等价类） |
 | **L3b** | 每行「预期要点」非空 | 告警 |
 | **L4** | 「覆盖 R-ID」落在 `--requirement-rules` 清单内 | 阻断（查编造） |
 | **L5** | 标 `[假设]` 的行占比 ≤ `--assume-max`（默认 30%） | 超限阻断，否则告警并单列 |
@@ -58,6 +58,8 @@
 | **L7** | 同一字段内「类/边界点」不重复 | 告警（矩阵冗余） |
 | **L8** | 每个数值/枚举字段至少有 1 行「无效类」 | 告警（非法取值是否漏测） |
 | **L9** | `--cases`：矩阵引用的用例 ID 在用例库中真实存在 | 阻断（回指闭环） |
+| **L3d** | `--stage design` 时用例 ID 为空 | 告警（待回填，不阻断） |
+| **L10** | `--stage full --cases`：用例库中**未被任何矩阵行引用**的用例 | 告警（`--orphan-case-mode block` 可阻断） |
 
 ### `[假设]` 为什么不计入有效覆盖
 
@@ -65,30 +67,44 @@
 
 这不是形式主义——见优化方案风险 R2：**为过一致性校验硬编边界数值，造出伪断言比不写更危险**。`[假设]` 行占比 >30% 即判"在为无依据的数据编边界"，直接阻断。
 
-## 四、命令
+## 四、命令：**必须分两段跑**
+
+矩阵和用例是"鸡生蛋"关系——建矩阵时用例还没写，「用例 ID」必然为空。若一次跑到底，就会出现"用例没写 → 矩阵过不了 → 不许写用例"的**死锁**。所以 lint 分两档：
+
+| 档位 | 时机 | 「用例 ID」为空怎么办 |
+|---|---|---|
+| `--stage design`（**默认**） | Step 3.5 建矩阵 | 记为「待回填」，**只告警不阻断** |
+| `--stage full` | Step 5 用例生成后 | 判「未消费等价类」，**阻断**；并反向查"用例未被矩阵引用" |
 
 ```bash
-# 基本（只看矩阵自身完整性）
-python scripts/matrix_lint.py "test_output/{版本}/testpoint/等价类边界值矩阵.md"
+# ① Step 3.5：建矩阵时（用例 ID 允许全空，此时只要字段/类/边界点齐全即可过）
+python scripts/matrix_lint.py "test_output/{版本}/testpoint/等价类边界值矩阵.md" \
+       --requirement-rules requirements.json \
+       -o 矩阵lint报告_design.md
 
-# 推荐：同时校验需求非编造 + 用例回指真实存在
+# ② Step 5 出完用例：回填「用例 ID」后复核，这一档才是真闸门
 python scripts/matrix_lint.py 矩阵.md \
        --requirement-rules requirements.json \
-       --cases test_cases.json \
-       -o 矩阵lint报告.md
+       --cases test_cases.json --stage full \
+       -o 矩阵lint报告_full.md
 
-# 调门槛（字段少/简单项目）
+# ③ 想把"用例没有设计依据"也算阻断（默认只告警）
+python scripts/matrix_lint.py 矩阵.md --cases test_cases.json --stage full --orphan-case-mode block
+
+# ④ 调门槛（字段少/简单项目）
 python scripts/matrix_lint.py 矩阵.md --min-boundary 2 --assume-max 0.4
 ```
 
 退出码：`0` 通过（可带告警）｜`1` 不达标｜`2` 输入或表头错误。
 
+> **为什么允许多跑一次**：`design` 档保证"矩阵本身想清楚了"（字段、类、边界点、预期要点齐全）；`full` 档保证"用例真的照矩阵写了"（每个类都被消费、没有凭空多出的用例）。两档合并就会死锁，只跑 design 则会放任用例与矩阵脱节——**两个都要跑**。
+
 ## 五、流程位置
 
 ```
-Step 3 测试点  →  Step 3.5 矩阵（本文件 + matrix_lint.py）  →  Step 4 模板  →  Step 5 用例
-                        ↓ lint 不通过
-                    ❌ 不得进 Step 5
+Step 3 测试点 → Step 3.5 矩阵 + lint(--stage design) → Step 4 模板 → Step 5 用例 → lint(--stage full)
+                     ↓ design 不通过                                  ↓ full 不通过
+                 ❌ 不得进 Step 4/5                            ❌ 不得导出 Excel
 ```
 
 - **产物路径（强制）**：`test_output/{版本+需求名}/testpoint/等价类边界值矩阵.md`

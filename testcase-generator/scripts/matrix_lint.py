@@ -20,7 +20,9 @@ matrix_lint.py — 等价类 / 边界值矩阵（Step 3.5 中间产物）的 lin
 检查项：
   L1 表头完整性（必需列缺失 → 退出码 2）
   L2 每个数值/枚举类字段的边界点数 >= --min-boundary（默认 3）→ 阻断
-  L3 每行必须有「用例 ID」，否则报「未消费等价类」→ 阻断
+  L3 每行必须有「用例 ID」，否则报「未消费等价类」→ 只在 --stage full 阻断
+     （--stage design 是 Step 3.5 建矩阵时的默认档：此刻用例还没生成，用例 ID 必然为空，
+      若在此档就阻断会造成"用例没写→矩阵过不了→不许写用例"的死锁）
   L4 「覆盖 R-ID」必须落在 --requirement-rules 清单内 → 阻断（查编造）
   L5 标 [假设] 的行占比 > --assume-max（默认 30%）→ 阻断；否则告警并单列
   L6 字段类型不在白名单 → 告警（提示口径不统一）
@@ -192,10 +194,15 @@ def lint(rows, m, args, rule_ids=None, case_ids=None):
         d[kd] += 1
         d["points"].append(pt)
 
-        # L3 未消费等价类
+        # L3 未消费等价类：design 档只记待回填，full 档才阻断
         if not cid_raw or cid_raw in ("-", "—", "/", "待补", "TBD"):
             d["no_case"].append(pt)
-            issues.append(("block", "L3", f"`{f} · {pt}`（{kd}）无用例回指——属未消费等价类"))
+            if args.stage == "full":
+                issues.append(("block", "L3",
+                               f"`{f} · {pt}`（{kd}）无用例回指——属未消费等价类"))
+            else:
+                issues.append(("warn", "L3d",
+                               f"`{f} · {pt}`（{kd}）待回填用例 ID（Step 3.5 建矩阵阶段允许为空）"))
         if not exp or exp in ("-", "—", "/"):
             d["no_expect"].append(pt)
             issues.append(("warn", "L3b", f"`{f} · {pt}`（{kd}）缺「预期要点」，无法判断断言什么"))
@@ -240,6 +247,23 @@ def lint(rows, m, args, rule_ids=None, case_ids=None):
         if dup:
             issues.append(("warn", "L7", f"字段 `{f}` 的类/边界点重复: {sorted(dup)}"))
 
+    # L10 反向校验（full 阶段 + 提供 --cases）：用例未被任何矩阵行引用 = 无设计依据
+    if args.stage == "full" and case_ids is not None:
+        referenced = set()
+        for row in rows:
+            for c in SPLIT_ID.split(cell(row, m, "case")):
+                if c:
+                    referenced.add(c)
+        orphans = sorted(c for c in case_ids if c and c.startswith("TC-") and c not in referenced)
+        if orphans:
+            msg = (f"{len(orphans)} 条用例未被任何矩阵行引用（无设计依据，"
+                   f"要么补矩阵行、要么删用例）: {orphans[:10]}"
+                   + ("…" if len(orphans) > 10 else ""))
+            if args.orphan_case_mode == "block":
+                issues.append(("block", "L10", msg))
+            else:
+                issues.append(("warn", "L10", msg))
+
     # L5 假设行占比
     assume_ratio = (len(assume_rows) / total) if total else 0.0
     if assume_ratio > args.assume_max:
@@ -263,11 +287,15 @@ def render(per_field, issues, assume_rows, assume_ratio, total, args, tables_use
     L.append("# 等价类 / 边界值矩阵 Lint 报告\n")
     L.append("## 一、总览\n")
     L.append("| 指标 | 值 |\n|---|---|")
+    L.append(f"| 阶段 | **{args.stage}**"
+             + ("（Step 3.5 建矩阵，用例 ID 允许为空）" if args.stage == "design"
+                else "（用例生成后回填复核）") + " |")
     L.append(f"| 矩阵表数量 | {tables_used} |")
     L.append(f"| 数据行 | {total} |")
     L.append(f"| 字段数 | {len(per_field)} |")
     L.append(f"| 边界点总数 | {n_boundary} |")
-    L.append(f"| 未消费等价类 | {sum(len(d['no_case']) for d in per_field.values())} |")
+    label = "未消费等价类" if args.stage == "full" else "待回填用例 ID"
+    L.append(f"| {label} | {sum(len(d['no_case']) for d in per_field.values())} |")
     L.append(f"| [假设] 行占比 | {assume_ratio:.0%}（上限 {args.assume_max:.0%}） |")
     L.append(f"| 阻断项 / 告警项 | {len(blocks)} / {len(warns)} |\n")
 
@@ -288,7 +316,10 @@ def render(per_field, issues, assume_rows, assume_ratio, total, args, tables_use
     L.append("")
 
     if any(d["no_case"] for d in per_field.values()):
-        L.append("## 三、未消费等价类（无用例回指，不计入覆盖）\n")
+        if args.stage == "full":
+            L.append("## 三、未消费等价类（无用例回指，不计入覆盖）\n")
+        else:
+            L.append("## 三、待回填用例 ID（建矩阵阶段允许为空，Step 5 后跑 `--stage full` 复核）\n")
         for f, d in per_field.items():
             if d["no_case"]:
                 L.append(f"- **{f}**：{'、'.join(d['no_case'])}")
@@ -316,14 +347,22 @@ def render(per_field, issues, assume_rows, assume_ratio, total, args, tables_use
             L.append(f"- `{code}` {msg}")
         if len(blocks) > 20:
             L.append(f"- … 其余 {len(blocks) - 20} 项")
+    elif args.stage == "design":
+        L.append("**通过（design 阶段）**：矩阵已可作用例来源清单；"
+                 "用例生成后须回填「用例 ID」并跑 `--stage full --cases test_cases.json` 复核。")
     else:
-        L.append("**通过**：矩阵可用作 Step 5 的用例来源清单。")
+        L.append("**通过（full 阶段）**：矩阵与用例库已双向对齐。")
     return "\n".join(L)
 
 
 def main():
     ap = argparse.ArgumentParser(description="等价类/边界值矩阵 lint（Step 3.5 闸门）")
     ap.add_argument("matrix", help="矩阵 Markdown 文件")
+    ap.add_argument("--stage", choices=["design", "full"], default="design",
+                    help="design=建矩阵阶段（用例 ID 允许空，L3 降级告警）；"
+                         "full=用例生成后回填复核（L3 阻断 + 反向查未被引用的用例）")
+    ap.add_argument("--orphan-case-mode", choices=["warn", "block"], default="warn",
+                    help="full 阶段：用例库中未被任何矩阵行引用的用例如何处理（默认 warn）")
     ap.add_argument("--min-boundary", type=int, default=3,
                     help="数值/枚举字段的边界点下限（默认 3）")
     ap.add_argument("--assume-max", type=float, default=0.30,

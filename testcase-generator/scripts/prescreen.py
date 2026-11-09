@@ -202,6 +202,8 @@ def main():
                     help="第12项设计方法一致性校验强度（默认 warn）")
     ap.add_argument("--scene-rule-mode", choices=["off", "warn", "block"], default="warn",
                     help="第13项需求级场景配额强度（默认 warn）")
+    ap.add_argument("--min-neg-per-rule", type=int, default=3,
+                    help="第13项：每条需求至少有 1 条负向即不阻断；少于该数（默认 3）仅告警")
     args = ap.parse_args()
 
     exempt_rules = {x.strip() for x in args.density_exempt.split(",") if x.strip()}
@@ -523,15 +525,21 @@ def main():
 
     # 13. 需求级场景配额（M6）：第 9 项的下钻，防"大模块掩盖小需求"
     if args.scene_rule_mode != "off":
-        no_neg = []
+        no_neg, thin_neg_rule = [], []
         for rid, lst in sorted(linked.items()):
             if rid in exempt_rules:
                 continue
             neg = sum(1 for c in lst if classify_case(c)[0] == "neg")
             if neg == 0:
                 no_neg.append(f"{rid}({len(lst)} 条)")
+            elif neg < args.min_neg_per_rule:
+                thin_neg_rule.append(f"{rid}(负{neg}条)")
+        if thin_neg_rule:
+            warns.append(f"{len(thin_neg_rule)} 个需求的负向用例偏少（<{args.min_neg_per_rule} 条，"
+                         f"建议 1 正向 : ≥3 异常/边界）: "
+                         + "、".join(thin_neg_rule[:10]) + ("…" if len(thin_neg_rule) > 10 else ""))
         if no_neg:
-            msg = (f"{len(no_neg)} 个需求无任何异常/边界用例（需求级配额 1 正向 : ≥3 负向）: "
+            msg = (f"{len(no_neg)} 个需求无任何异常/边界用例（需求级至少 1 条负向）: "
                    + "、".join(no_neg[:10]) + ("…" if len(no_neg) > 10 else ""))
             if args.scene_rule_mode == "block":
                 fails.append(msg)

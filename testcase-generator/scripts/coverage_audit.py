@@ -11,7 +11,7 @@ coverage_audit.py — 用例覆盖率评审器（用例库 × 需求文档 → �
 三类缺口（见 references/coverage_audit.md）：
   G1 需求有、用例无         → 规则未被任何用例覆盖
   G2 覆盖了但场景失衡       → 模块缺异常/边界/权限类用例（用户例为 0 直接标红）
-  G3 名义覆盖               → 1 条用例挂多个规则，实际颗粒度撑不住
+  G3 名义覆盖               → 规则含多约束词，但只有 ≤2 条用例挂上去，颗粒度撑不住
 
 输入：
   用例  —— .json（数组或 {"cases": [...]}）或 .xlsx（自动识别表头，兼容中文列名）
@@ -41,6 +41,11 @@ NEG_KEYS = ["异常", "边界", "失败", "错误", "超限", "超时", "为空"
             "不支持", "重复", "断网", "弱网", "逆向", "负向", "拒绝", "上限", "下限",
             "最大", "最小", "超出", "超过"]
 POS_KEYS = ["正常", "成功", "正向", "主流程", "有效"]
+
+# G3「多约束」词：一条规则里出现这些词，说明它本身横跨多个判定分支，
+# 若只有 1~2 条用例挂上去，基本可以断定是名义覆盖（一条用例打勾，实际没测开）。
+MULTI_CONSTRAINT = ["或", "等", "分别", "组合", "同时", "以及", "四类", "三类", "两种情况", "多"]
+
 
 # 需求文本 → 建议用例类型
 TYPE_HINTS = [
@@ -283,7 +288,12 @@ def audit(cases, rules, top=3, threshold=0.08, module_min=DEFAULT_MODULE_MIN):
             "case_count": len(d["case_ids"]) or len(d["cases_seen"]),
             "pos": d["pos"], "neg": d["neg"], "perm": d["perm"],
             "missing": missing, "weak_only": weak_only,
-            "nominal": [rid for rid in d["rules"] if hit_count[rid] == 1],
+            # G3 名义覆盖：≤2 条用例就撑住一条"多约束"规则（含"或/等/分别/组合…"），
+            # 说明颗粒度不够，拆成单约束场景后条数会继续增长。
+            # 旧口径只抓"恰好 1 条"，2~4 条的浅覆盖全部静默，是漏判的主因。
+            "nominal": [rid for rid in d["rules"]
+                        if 0 < hit_count[rid] <= 2
+                        and any(w in (rule_by_id[rid].get("text") or "") for w in MULTI_CONSTRAINT)],
         })
 
     total_rules = len(rule_by_id)
@@ -582,14 +592,19 @@ def render_markdown(res, cases_path, rules_path):
     nominal = [(r["module"], rid) for r in res["modules"] for rid in r["nominal"]]
     a("## 五、名义覆盖风险（G3）")
     a("")
+    a("> 判定口径：**覆盖该规则的用例 ≤2 条，且规则文本含多约束词**"
+      "（或 / 等 / 分别 / 组合 / 同时 / 以及 / 四类 / 三类 / 两种情况 / 多）。"
+      "此类规则本身横跨多个判定分支，1~2 条用例撑不住，属「名义覆盖」。")
+    a("")
     if nominal:
-        a("以下规则**仅有 1 条用例**覆盖，规则描述跨度大时属「名义覆盖」，建议拆分：")
+        a(f"以下 {len(nominal)} 条规则落在该口径内，建议按分支拆成单约束场景：")
         a("")
         for m, rid in nominal[:20]:
             rule = res["rule_by_id"][rid]
-            a(f"- `{rid}` [{m}] {(rule.get('text') or '')[:70]}")
+            n = len(res["hit_cases"].get(rid, []))
+            a(f"- `{rid}` [{m}] 覆盖 {n} 条 · {(rule.get('text') or '')[:70]}")
     else:
-        a("无：每条规则至少有 2 条用例或无需拆分。")
+        a("无：每条规则或已有 >2 条用例，或规则本身是单约束描述，无需拆分。")
     a("")
 
     a("## 六、总结与建议")
