@@ -20,6 +20,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 🚧 **Analysis gate (two phases)**: produce a Test Analysis Report first → generate only after confirmation; five hard constraints — no assumptions, mandatory business-rule consultation, terminology consistency, traceable sources, explicit multi-source attribution (see `references/analysis_gate.md`)
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
 - 🎯 **Four-scenario quota**: per function point, `1 positive : ≥3 negative/boundary` and **≥1 permission case** (not logged in / no permission / cross-role escalation); happy-path-only modules are flagged as imbalanced
+- 📊 **Equivalence / boundary matrix (mandatory Step 3.5)**: enumerate each field's equivalence classes and boundary points, **one item per row**, each pointing back to concrete cases; `matrix_lint.py` blocks boundary-point shortage, unconsumed classes, fabricated requirement IDs, `[assumption]` over 30%, and column shift. It is the only fuel for the density gate — without it, "6 cases" just rephrases the same test
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
 - 🛡️ **Quality prescreen gate (13 checks)**: 10 structural checks (coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota / orphan cases) + 3 depth checks (**per-requirement density / method-consistency / requirement-level scenario quota**) — fails the gate, no release
 - 🔍 **Coverage audit (reverse direction)**: review an existing case library against requirements and produce **module-level** coverage plus three gap types (G1 missing / G2 imbalanced scenarios / G3 nominal coverage); reads `.xlsx` directly (see `references/coverage_audit.md`)
@@ -53,7 +54,7 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (18 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (20 files; organized by layer below, physically flat)
 │   ├── analysis_gate.md      # ★ analysis gate & hard constraints (two phases + STOP & ASK + H1–H5)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
 │   ├── naming_rules.md       # 7 hard naming red-lines + case-ID convention (TC-{module}-{seq})
@@ -62,6 +63,7 @@ testcase-generator/
 │   ├── function_points.md    # Function-point definition & decomposition (how to design)
 │   ├── test_methods.md       # 6 black-box methods explained + ordered stacking
 │   ├── testpoint_checklist.md# Test-point 5-dimension checklist + coverage list
+│   ├── equivalence_matrix.md # ★ Equivalence/boundary matrix (mandatory Step 3.5 artifact, one item per row)
 │   ├── multimodal.md         # Multimodal UI reading (image → cases)
 │   ├── excellent_case_patterns.md # ★ evidence-based patterns (10 practices + self-check + anti-patterns)
 │   ├── priority_p0_p3.md     # P0–P3 grading strategy (priority)
@@ -73,10 +75,11 @@ testcase-generator/
 │   ├── defect_loop.md        # ★Defect loop (real-defect layer): escape gap G4 + gap classes + backfill order
 │   ├── workflow.md           # Quality-assurance overview (five gates + one retrospective + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (13, Python 3.13/3.14)
+└── scripts/                 # Executable scripts (16, Python 3.13/3.14)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
     ├── prescreen.py             # Quality prescreen gate (13 checks)
+    ├── matrix_lint.py           # Step 3.5 matrix lint (boundary count / unconsumed classes / column shift)
     ├── coverage_audit.py        # Coverage audit (module drill-down + gap report)
     ├── mutation_audit.py        # Strength audit (requirement-level mutation, experimental, warn by default)
     ├── score_testcases.py       # Quality scoring

@@ -20,6 +20,7 @@ English version: [README.en.md](README.en.md)
 - 🚧 **分析闸门（两阶段）**：先出《测试分析报告》→ 确认后才生成；五条硬约束——禁止假设、业务规则咨询必做、术语一致、来源可追溯、多源融合显式标注（见 `references/analysis_gate.md`）
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
 - 🎯 **四类场景配额**：每个功能点 `1 正向 : ≥3 异常·边界` 且 **≥1 条权限校验**（未登录/无权限/跨角色越权），只测顺利路径直接判场景失衡
+- 📊 **等价类/边界值矩阵（Step 3.5 强制）**：逐字段穷举等价类与边界点，**一行一项**并回指到具体用例；`matrix_lint.py` 拦「边界点 <3 / 未消费等价类 / 编造需求 / `[假设]` 超 30% / 列错位」。它是密度闸门的**唯一燃料**——没有矩阵，补出来的 6 条只是同一件事换说法
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
 - 🛡️ **质量预审闸门（13 项）**：结构面 10 项（覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额 / 孤儿用例）+ 密度面 3 项（**逐需求密度 / 方法一致性 / 需求级场景配额**），不达标不出库
 - 🔍 **覆盖率评审（逆向）**：拿已有用例库回审需求，输出**模块级**覆盖率 + 三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖）；支持 `.xlsx` 直读，专治"全局 95% 掩盖某模块 40%"（见 `references/coverage_audit.md`）
@@ -54,7 +55,7 @@ testcase-generator/
 ├── README.md                # 中文总览（本文件）
 ├── README.en.md             # 英文总览
 ├── LICENSE                  # MIT
-├── references/              # 方法论与规范（19 篇，按下列分层组织，物理上同目录）
+├── references/              # 方法论与规范（20 篇，按下列分层组织，物理上同目录）
 │   ├── analysis_gate.md      # ★分析闸门与硬约束（两阶段 + STOP & ASK + H1–H5）
 │   ├── case_design.md        # ★用例编写规范唯一权威：设计原则 + 四字段规范 + 类型转化 + 优先级口径 + 粒度
 │   ├── naming_rules.md       # 命名 7 条强制红线 + 用例编号规范（TC-{模块}-{序号}）
@@ -63,6 +64,7 @@ testcase-generator/
 │   ├── function_points.md    # 功能点定义与分解（如何设计）
 │   ├── test_methods.md       # 6 种黑盒方法详解 + 有序叠加
 │   ├── testpoint_checklist.md# 测试点 5 维度 + 四类场景配额 + 覆盖清单
+│   ├── equivalence_matrix.md # ★等价类/边界值矩阵（Step 3.5 强制中间产物，一行一项 + lint 规则）
 │   ├── multimodal.md         # 多模态读图（图→用例）
 │   ├── excellent_case_patterns.md # ★优秀用例实证模式（10 做法 + 自检清单 + 反面清单）
 │   ├── priority_p0_p3.md     # P0–P3 分级策略（优先级口径）
@@ -72,12 +74,13 @@ testcase-generator/
 │   ├── coverage_audit.md     # ★覆盖率评审（逆向）：模块级下钻 + G1/G2/G3 缺口
 │   ├── mutation_review.md    # ★强度闸门（P0 阻断）：需求层变异 + 零强度规则 + killer_pattern 规范
 │   ├── defect_loop.md        # ★缺陷反哺评审（真实缺陷层）：逃逸缺口 G4 + 缺口分类 + 回填顺序
-│   ├── workflow.md           # 质量保障机制总览（五道闸门 + 一道事后复盘 + 技术加速器）
+│   ├── workflow.md           # 质量保障机制总览（六道闸门 + 一道事后复盘 + 技术加速器）
 │   └── memory_mechanism.md   # 记忆机制
-└── scripts/                 # 可执行脚本（13 个，Python 3.14/3.13）
+└── scripts/                 # 可执行脚本（16 个，Python 3.14/3.13）
     ├── extract_requirements.py  # Step1 抽取需求规则清单
     ├── map_coverage.py          # 用例↔需求规则覆盖映射
     ├── prescreen.py             # 质量预审闸门（13 项）
+    ├── matrix_lint.py           # Step3.5 矩阵 lint（边界点/未消费等价类/编造/假设占比/列错位）
     ├── coverage_audit.py        # 覆盖率评审（模块级下钻 + 缺口报告）
     ├── mutation_audit.py        # 强度审计（需求层变异，实验性，默认 warn 不阻断）
     ├── score_testcases.py       # 质量评分
