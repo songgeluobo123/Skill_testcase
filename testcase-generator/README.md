@@ -25,6 +25,7 @@ English version: [README.en.md](README.en.md)
 - 🔍 **覆盖率评审（逆向）**：拿已有用例库回审需求，输出**模块级**覆盖率 + 三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖）；支持 `.xlsx` 直读，专治"全局 95% 掩盖某模块 40%"（见 `references/coverage_audit.md`）
 - 🧪 **强度闸门（默认 P0 阻断）**：需求层变异——假设需求被写错（阈值差一 / 边界方向写反 / 否定词去掉 / 动作漏做 / 文案改写），这条用例会不会变红？输出**零强度规则 / 零贡献用例**清单；**P0 规则 ≥90% 才放行**（P1–P3 只告警，`--mut-gate warn` 可切纯报告）。预审只保证结构，强度由 `scripts/mutation_audit.py` 兜底（见 `references/mutation_review.md`）
 - 🔗 **双向需求追溯（RTM）**：需求→用例（查漏测）+ 用例→需求（查孤儿），区分「全覆盖 / 部分覆盖 / 未覆盖」，可写入用例 Excel 的**第二个 sheet「需求追溯」**（`to_excel.py --with-rtm requirements.json`）
+- 🕳️ **缺陷反哺评审（逃逸驱动，默认不阻断）**：拿**真实缺陷**当外部地面真值，反算"这条缺陷发生时用例库为什么没红"——输出**逃逸缺陷清单**、**零覆盖模块**（库内 0 条用例却有事故）、**7 类断言缺口**（数值/逐字文案/结果态/唯一性/否定/边界/现象）与回归回填草案。口径收敛为 **「漏」可自动判、「拦」只给候选**（实测自动判「拦」人工一致率 0/5），因此不宣称拦截率、`--gate` 默认 `off`（见 `references/defect_loop.md`）
 - 📐 **实证写法模式**：从真实优秀用例库（1278 条）反推的 10 个可复制做法——双前置列分离、动词白名单、预期断言化、同构组批量产出、非功能三件套等（见 `references/excellent_case_patterns.md`）
 - 🧠 **记忆机制**：记录历史产品约束，跨会话复用
 - 📤 **多格式输出**：Excel（10 列）、XMind、Markdown 测试报告 / 测试点
@@ -53,7 +54,7 @@ testcase-generator/
 ├── README.md                # 中文总览（本文件）
 ├── README.en.md             # 英文总览
 ├── LICENSE                  # MIT
-├── references/              # 方法论与规范（18 篇，按下列分层组织，物理上同目录）
+├── references/              # 方法论与规范（19 篇，按下列分层组织，物理上同目录）
 │   ├── analysis_gate.md      # ★分析闸门与硬约束（两阶段 + STOP & ASK + H1–H5）
 │   ├── case_design.md        # ★用例编写规范唯一权威：设计原则 + 四字段规范 + 类型转化 + 优先级口径 + 粒度
 │   ├── naming_rules.md       # 命名 7 条强制红线 + 用例编号规范（TC-{模块}-{序号}）
@@ -70,16 +71,19 @@ testcase-generator/
 │   ├── quality_prescreen.md  # 质量预审 10 项闸门与阈值
 │   ├── coverage_audit.md     # ★覆盖率评审（逆向）：模块级下钻 + G1/G2/G3 缺口
 │   ├── mutation_review.md    # ★强度闸门（P0 阻断）：需求层变异 + 零强度规则 + killer_pattern 规范
-│   ├── workflow.md           # 质量保障机制总览（五道闸门 + 技术加速器）
+│   ├── defect_loop.md        # ★缺陷反哺评审（真实缺陷层）：逃逸缺口 G4 + 缺口分类 + 回填顺序
+│   ├── workflow.md           # 质量保障机制总览（五道闸门 + 一道事后复盘 + 技术加速器）
 │   └── memory_mechanism.md   # 记忆机制
-└── scripts/                 # 可执行脚本（11 个，Python 3.13）
+└── scripts/                 # 可执行脚本（13 个，Python 3.14/3.13）
     ├── extract_requirements.py  # Step1 抽取需求规则清单
     ├── map_coverage.py          # 用例↔需求规则覆盖映射
     ├── prescreen.py             # 质量预审闸门（10 项）
     ├── coverage_audit.py        # 覆盖率评审（模块级下钻 + 缺口报告）
     ├── mutation_audit.py        # 强度审计（需求层变异，实验性，默认 warn 不阻断）
     ├── score_testcases.py       # 质量评分
-    ├── to_excel.py              # 导出 10 列 Excel（`--emit-template` 出空白模板）
+    ├── to_excel.py              # 导出 10 列 Excel（`--emit-template` 出空白模板；`--with-environment`/`--with-remark`/`--with-defect` 可叠加 11–13 列）
+    ├── defect_audit.py          # 缺陷反哺评审（逃逸清单/零覆盖模块/缺口回填，默认不阻断）
+    ├── selftest_defect.py       # defect_audit 离线自测（17 项断言）
     ├── to_xmind.py              # 导出 XMind
     ├── read_xmind.py            # 解析 XMind 输入
     ├── read_ui_image.py         # 多模态读 UI 截图
@@ -96,7 +100,7 @@ testcase-generator/
 | **A. 方法论** | `function_points.md`、`test_methods.md`、`testpoint_checklist.md`、`multimodal.md` | 定义"如何设计"（拆解 / 方法 / 测试点 / 读图） |
 | **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（优先级唯一权威来源） |
 | **D. 数据规则** | `data_rules.md` | 仅测试数据校验映射库 |
-| **E. 质量保障** | `quality_standards.md`、`quality_prescreen.md`、`coverage_audit.md`、`mutation_review.md`（强度闸门）、`workflow.md`、`memory_mechanism.md` | 定义"怎么验"：标准/评分、预审闸门、覆盖率评审（模块级下钻）、强度评审（需求层变异）、机制总览、记忆 |
+| **E. 质量保障** | `quality_standards.md`、`quality_prescreen.md`、`coverage_audit.md`、`mutation_review.md`（强度闸门）、`defect_loop.md`（缺陷反哺）、`workflow.md`、`memory_mechanism.md` | 定义"怎么验"：标准/评分、预审闸门、覆盖率评审（模块级下钻）、强度评审（需求层变异）、缺陷反哺（真实故障对账）、机制总览、记忆 |
 
 > **边界原则：每条规则只在一处定义（单一真相源）。** `case_design.md` 为用例编写规范唯一权威；优先级模型只存于 `priority_p0_p3.md`(P0–P3，唯一权威)；评分 rubric 只在 `quality_standards.md`；数据校验只在 `data_rules.md`。交叉处一律用"见 xxx"引用，不复制规则。
 
@@ -110,6 +114,7 @@ testcase-generator/
 | ④ | 模板确认 | 10 列 Excel 模板 + 命名/优先级口径 |
 | ⑤ | 用例设计 | 结构化用例 JSON（含 `coverage_rule` / `design_method` / `priority`） |
 | ⑥ | 用例输出 | 10 列 Excel + XMind + 测试报告 + 质量评分 + 可选覆盖率评审报告 |
+| ⑥.5 | 缺陷反哺（可选，版本收尾/接手存量库） | 《缺陷反哺报告》+ 逃逸缺陷清单 + 缺口回填草案（**默认不阻断**） |
 
 ## 五、Excel 10 列模板
 
@@ -153,6 +158,11 @@ python scripts/to_excel.py ./out/test_cases_final.json -o 测试用例.xlsx [--w
 
 # 6. 质量评分（每项维度需 ≥90，任一不足自动回退）
 python scripts/score_testcases.py ./out/test_cases_final.json
+
+# 7. 缺陷反哺（可选：版本收尾 / 接手存量库；无缺陷数据则跳过，不阻断）
+python scripts/defect_audit.py bugs.json 测试用例.xlsx \
+    --module-map ./out/module_map.json --layer 3 -o ./out/缺陷反哺报告.md \
+    --emit-backfill ./out/regression_backfill.json
 ```
 
 ## 七、依赖

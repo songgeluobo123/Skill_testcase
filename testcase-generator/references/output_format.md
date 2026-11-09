@@ -56,6 +56,20 @@ Step 6 的强制主产物是 `.xlsx`，列定义如下。**打开即测试用例
 - 子场景清单必须**回到需求源表取**（枚举表、命令索引、参数阈值表），禁止臆造；本项目实践中 564 条命中 41 条（≈7%）。
 - **不要为凑格式给非范围性用例编备注**——留空，保持备注列的信息密度。
 
+## 可选第 12 列：关联缺陷（`--with-defect`）
+
+版本收尾复盘（Step 6.5 缺陷反哺）后，把"这条用例实际拦过/关联了哪些真实缺陷"落在用例侧，便于回归选题与 DDF 统计：
+
+| 序号 | 列名 | 说明 | 来源字段 |
+|---|---|---|---|
+| 1–10 | 同 10 列 | 用例编号 … 设计方法 | 同 10 列 |
+| **11/12** | **关联缺陷** | 形如 `BUG-1234567（已修复）`，多条用 `；` 分隔；无关联留空 | `defect` |
+
+- 生成命令：`python scripts/to_excel.py test_cases.json -o out.xlsx --with-defect`（可与 `--with-environment` / `--with-remark` 叠加，叠加后为 12 / 13 列，列序固定：环境 → … → 备注 → 关联缺陷）。
+- **不加该参数时输出与 v1.7.x 完全一致（10 列，逐字节相同）**——主模板不因新能力而变，避免存量项目对不上表头。
+- 只写**已确认关联**的缺陷：`defect_audit.py` 判为 `suspected` 的不写入（实测自动判「拦」人工一致率 0/5，写进列里等于给错误结论背书）。
+- 缺陷号格式跟随项目（TAPD 长 id / 短号均可），但要保证与 `defect_map.json` 的 `id` 一一对得上，RTM 第三维才对得齐。
+
 ## 格式硬约束（Excel 容器相关，非写法）
 
 - 前置条件、测试步骤、预期结果：使用**实际换行**，不是 `\n` 字符。
@@ -97,4 +111,5 @@ python scripts/to_excel.py --emit-template "test-case-design/examples/testcases/
 ```
 
 > 说明：`id / test_type / stage` 为可选展示字段；`module / name / priority / precondition / steps / expected` 为必需；
-> `test_data / coverage_rule / design_method` 供质量预审（`prescreen.py`）与覆盖分析（`map_coverage.py`）使用。
+> `test_data / coverage_rule / design_method` 供质量预审（`prescreen.py`）与覆盖分析（`map_coverage.py`）使用；
+> `defect`（可选，字符串）仅在 `--with-defect` 时导出。

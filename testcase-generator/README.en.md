@@ -21,9 +21,10 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
 - 🎯 **Four-scenario quota**: per function point, `1 positive : ≥3 negative/boundary` and **≥1 permission case** (not logged in / no permission / cross-role escalation); happy-path-only modules are flagged as imbalanced
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
-- 🛡️ **Quality prescreen gate (9 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota — fails the gate, no release
+- 🛡️ **Quality prescreen gate (10 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota — fails the gate, no release
 - 🔍 **Coverage audit (reverse direction)**: review an existing case library against requirements and produce **module-level** coverage plus three gap types (G1 missing / G2 imbalanced scenarios / G3 nominal coverage); reads `.xlsx` directly (see `references/coverage_audit.md`)
 - 🧪 **Strength gate (blocks on P0 by default)**: requirement-level mutation — if the requirement were implemented wrongly (off-by-one threshold / inverted boundary / dropped negation / skipped action / reworded copy), would this case go red? Emits a **zero-strength rules / zero-contribution cases** list; **P0 rules must reach 90%** (P1–P3 warn only; `--mut-gate warn` switches to report-only). Prescreen only guarantees structure; strength is covered by `scripts/mutation_audit.py` (see `references/mutation_review.md`)
+- 🕳️ **Defect loop (escape-driven, non-blocking by default)**: use **real defects** as external ground truth and back-compute "why the library stayed green when this bug happened" — outputs the **escaped-defect list**, **zero-coverage modules** (0 cases but real incidents) and **7 assertion-gap classes** (numeric / verbatim text / result-state / uniqueness / negation / boundary / phenomenon) plus a regression-backfill draft. Scope is deliberately narrowed to **"misses" are auto-judgeable, "caught" only as candidates** (human agreement on auto-judged catches: 0/5), so no interception rate is claimed and `--gate` defaults to `off` (see `references/defect_loop.md`)
 - 📐 **Evidence-based writing patterns**: 10 reproducible practices reverse-engineered from a real high-quality case library (1,278 cases) — split environment/precondition columns, verb whitelist, assertion-style expected results, isomorphic groups, non-functional triad (see `references/excellent_case_patterns.md`)
 - 🧠 **Memory mechanism**: records historical product constraints, reused across sessions
 - 📤 **Multi-format output**: Excel (10 columns), XMind, Markdown test report / test points
@@ -52,7 +53,7 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (17 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (18 files; organized by layer below, physically flat)
 │   ├── analysis_gate.md      # ★ analysis gate & hard constraints (two phases + STOP & ASK + H1–H5)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
 │   ├── naming_rules.md       # 7 hard naming red-lines + case-ID convention (TC-{module}-{seq})
@@ -69,16 +70,19 @@ testcase-generator/
 │   ├── quality_prescreen.md  # Quality prescreen 9 gates & thresholds
 │   ├── coverage_audit.md     # ★ coverage audit (reverse): module drill-down + G1/G2/G3 gaps
 │   ├── mutation_review.md    # ★ strength gate (P0 blocking): requirement-level mutation + killer_pattern spec
-│   ├── workflow.md           # Quality-assurance overview (five gates + accelerators)
+│   ├── defect_loop.md        # ★Defect loop (real-defect layer): escape gap G4 + gap classes + backfill order
+│   ├── workflow.md           # Quality-assurance overview (five gates + one retrospective + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (11, Python 3.13)
+└── scripts/                 # Executable scripts (13, Python 3.13/3.14)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
     ├── prescreen.py             # Quality prescreen gate (9 checks)
     ├── coverage_audit.py        # Coverage audit (module drill-down + gap report)
     ├── mutation_audit.py        # Strength audit (requirement-level mutation, experimental, warn by default)
     ├── score_testcases.py       # Quality scoring
-    ├── to_excel.py              # Export 10-column Excel (`--emit-template` for blank template)
+    ├── to_excel.py              # Export 10-column Excel (`--emit-template` for blank template; `--with-environment`/`--with-remark`/`--with-defect` stack to 11–13 columns)
+    ├── defect_audit.py          # Defect loop (escaped list / zero-coverage modules / gap backfill, non-blocking)
+    ├── selftest_defect.py       # Offline self-test for defect_audit (17 assertions)
     ├── to_xmind.py              # Export XMind
     ├── read_xmind.py            # Parse XMind input
     ├── read_ui_image.py         # Multimodal UI screenshot reading
@@ -95,7 +99,7 @@ testcase-generator/
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
 | **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
 | **D. Data rules** | `data_rules.md` | Test-data validation mapping only |
-| **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `coverage_audit.md`, `mutation_review.md` (strength gate), `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, coverage audit (module drill-down), strength audit (requirement-level mutation), mechanism overview, memory |
+| **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `coverage_audit.md`, `mutation_review.md` (strength gate), `defect_loop.md` (defect loop), `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, coverage audit (module drill-down), strength audit (requirement-level mutation), defect loop (real-incident reconciliation), mechanism overview, memory |
 
 > **Boundary rule: each rule is defined exactly once (single source of truth).** `case_design.md` is the sole authority for case authoring; the priority model lives only in `priority_p0_p3.md` (P0–P3, sole authority); the scoring rubric lives only in `quality_standards.md`; data validation only in `data_rules.md`. Cross-references use "see xxx" instead of copying rules.
 
@@ -109,6 +113,7 @@ testcase-generator/
 | ④ | Template confirmation | 10-column Excel template + naming/priority convention |
 | ⑤ | Case design | Structured case JSON (`coverage_rule` / `design_method` / `priority`) |
 | ⑥ | Case output | 10-column Excel + XMind + test report + quality score + optional coverage-audit report |
+| ⑥.5 | Defect loop (optional; release wrap-up / legacy library) | Defect Loop Report + escaped-defect list + gap backfill draft (**non-blocking**) |
 
 ## 5. Excel 10-column template
 
@@ -139,7 +144,7 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. coverage mapping
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. quality prescreen gate (9 checks; lists gaps if it fails)
+# 4. quality prescreen gate (10 checks; lists gaps if it fails)
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 
@@ -152,6 +157,11 @@ python scripts/to_excel.py ./out/test_cases_final.json -o cases.xlsx
 
 # 6. quality scoring (each dimension must be ≥ 90, rollback if any below)
 python scripts/score_testcases.py ./out/test_cases_final.json
+
+# 7. defect loop (optional: release wrap-up / legacy library; skipped when no defect data)
+python scripts/defect_audit.py bugs.json cases.xlsx \
+    --module-map ./out/module_map.json --layer 3 -o ./out/defect_loop_report.md \
+    --emit-backfill ./out/regression_backfill.json
 ```
 
 ## 7. Dependencies

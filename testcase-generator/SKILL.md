@@ -48,6 +48,17 @@ agent_created: true
 
 "有人测"不等于"测得出错"。文字命中、`coverage_rule` 标注、预期里出现"应/提示/数字"，都不能证明这条用例在实现写错时会变红。判断口径：**假设需求被写错（阈值改一次、边界方向写反、否定词去掉、该做的动作漏做），这条用例会不会失败？** 不会 = 名义覆盖。可执行版本见 Step 5.5 与 `references/mutation_review.md`（P0 规则 <90% 直接阻断）。
 
+### 六、有效性必须有外部证据
+
+前五条都在自证：「结构合理」「覆盖率达标」「变异体杀得死」——但它们量的都是**我们假想的错**。
+真正的判据只有一条：**假设这条用例面对的是历史缺陷库里的那 3 个真实故障，它会不会红？**
+答不上来 = 只有内部自洽。
+
+落地方式（默认不阻断、不接主流程）：
+- 抓该项目的真实缺陷（TAPD 等）→ `scripts/defect_audit.py` 算「逃逸缺陷」清单 + DDF + 缺口分类；
+- **只认「漏」不认「拦」**：脚本能可靠判定"缺陷发生了而库里没有断言能拦它"，不能可靠判定"被哪条用例拦住了"（实测自动判「拦」的人工一致率 0/5）；
+- 结论落在「补哪类断言」而不是「拦截率多少」——详见 Step 6.5 与 `references/defect_loop.md`。
+
 ## 六步工作流（顺序执行，不可跳步）
 
 > 全程分两阶段（见 `references/analysis_gate.md`）：**阶段 1 分析**（Step 1 → 出《测试分析报告》）→ 🚧 **STOP & ASK 硬闸门**（用户确认）→ **阶段 2 生成**（Step 2–6）。未经确认不得生成用例或导出 Excel。
@@ -117,13 +128,40 @@ agent_created: true
 ### Step 6 — 测试用例输出
 
 1. 把审阅通过的用例结构化到 `test_cases.json`。
-2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。项目要求"环境准备 / 界面状态"分列时加 `--with-environment` 输出 11 列（双前置列，见 `excellent_case_patterns.md` 做法 1）；用例中存在**范围性用例**（一条覆盖多个并列子场景）时加 `--with-remark` 在末列输出「备注」列承载场景展开（见门禁速查 13）；需要**双向需求追溯**时加 `--with-rtm requirements.json`，在**第二个 sheet「需求追溯」**输出需求→用例 / 用例→需求 / 孤儿用例矩阵（见 `coverage_audit.md` 四·五）。
+2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。项目要求"环境准备 / 界面状态"分列时加 `--with-environment` 输出 11 列（双前置列，见 `excellent_case_patterns.md` 做法 1）；用例中存在**范围性用例**（一条覆盖多个并列子场景）时加 `--with-remark` 在末列输出「备注」列承载场景展开（见门禁速查 13）；完成 Step 6.5 缺陷反哺后要落"这条用例关联过哪些真实缺陷"时加 `--with-defect`（末列「关联缺陷」，可与前两者叠加为 12/13 列，**不加则与旧版完全一致**）；需要**双向需求追溯**时加 `--with-rtm requirements.json`，在**第二个 sheet「需求追溯」**输出需求→用例 / 用例→需求 / 孤儿用例矩阵（见 `coverage_audit.md` 四·五）。
 3. **可选 XMind**：`scripts/to_xmind.py test_cases.json -o report.xmind --project <项目名>`。
 4. **质量评分**：`scripts/score_testcases.py test_cases.json`（**每项维度均需 ≥90**，任一不足即回退重生成）。
 5. **可选：覆盖率评审**：`scripts/coverage_audit.py test_cases.json requirements.json -o 覆盖率报告.md`（见 `references/coverage_audit.md`）。做**模块级**下钻，防"全局 95% 掩盖某模块 40%"；接手**存量用例库**时把第一个参数换成历史 `.xlsx` 即可直接评审。需要**双向追溯**时加 `--rtm-xlsx <用例Excel>`，把需求→用例 / 用例→需求 / 孤儿用例写入第二个 sheet。
 6. **记忆写入**：`scripts/memory_io.py record --root <项目根> --category <ambiguity|endpoint|granularity|missed> --content <...>`。
 
 **本步输出**：`.xlsx` 测试用例（主产物）+ 可选 `.xmind` + 评分报告 + 可选覆盖率评审报告。
+
+### Step 6.5 — 缺陷反哺评审（可选 · **不阻断**）
+
+> 触发时机：**版本收尾复盘** / **接手存量用例库** / 用户直接给了缺陷单（TAPD 导出）。
+> 新产品首次生成、无缺陷数据时**整步跳过**（不报错、不提示、不影响交付）。
+
+前五道闸门证明「结构对、覆盖到、杀得死变异体」，但证明不了「真实故障发生时库会不会红」。
+本步拿真实缺陷当外部地面真值，只回答一个问题：**这些缺陷发生的时候，我们的断言为什么没拦住？**
+
+1. **取缺陷单**：TAPD 导出（`{data:[{Bug:{}}]}`）/ `.xlsx` / `.csv` 均可；工作区无缺陷记录时直接跳过本步。
+2. **建一次模块归一映射**（约 30 条，可复用）：`--module-map module_map.json`，形如 `{"*/登录":"设备端-登录","*/报错":""}`。
+   映射为 `""` = 用例库里没有这个模块（**真实零覆盖，不要硬塞**）。
+3. **跑审计**：`scripts/defect_audit.py bugs.json cases.xlsx --module-map module_map.json --layer 3 -o 缺陷反哺报告.md --emit-backfill regression_backfill.json`
+4. **读三样东西，别读拦截率**：
+   - **逃逸缺陷清单**（`escaped`）——可靠，是事实；
+   - **零覆盖模块**（库内 0 条用例却有事故）——最硬的缺口，要新建用例；
+   - **缺口分类**（NUM/TXT/ACT/UNIQ/NEG/BND/PHEN）——决定补什么断言。
+5. **回填顺序**：零覆盖模块 → 补数值/逐字文案/结果态断言（**通常不新增用例**）→ 补否定与边界 → `PHEN` 退回需求侧。
+6. **落回流程**：回填项作为 Step 3 的「必答测试点」输入，重跑 Step 5 / 5.5 验证；`regression_backfill.json` 可直接喂 Step 5 生成回归用例。
+
+**硬口径（违反即结论失真）**：
+- `prevented`（已拦）**不得上报**——默认 `--prevented-mode off`，`suspected` 只是候选、默认不进报告；
+- `DER` 在缺陷单缺「发现阶段」字段时**写"不可算"**，不许用「本项目零线上缺陷」倒推 100%；
+- 汇报给**逃逸率区间**（下界＝确认逃逸，上界＝疑似也算漏），不给单点估计。
+- 本步**不产生阻断**：`--gate` 默认 `off`，退出码恒 0，不改变前五道闸门的任何判定。
+
+**本步输出**：《缺陷反哺报告》+ `defect_map.json` + `regression_backfill.json`（可选）。口径与踩坑见 `references/defect_loop.md`。
 
 ## 四核心质量标准（质量目标）
 
@@ -241,6 +279,16 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - 「评估范围 0」= 用例没 `coverage_rule` 且需求侧 `module`（章节号）对不上用例 `功能模块`。两条路：给需求副本做 module 归一（临时），或给用例补 `coverage_rule`（长期）。
 - 零贡献比例高不一定是"用例差"：若需求只覆盖模块里的一个子功能，范围内大部分用例本就不该杀死这些变异体 → 属于**范围粒度问题**，别据此删用例。
 
+**19. `defect_audit.py` 报 `undecidable` 比例 > 30%，报告几乎全是"无法判定"**
+- `undecidable` 只该吃掉两类：**(a)** 无效缺陷（被驳回/有意设计）；**(b)** 缺陷单信息不足（标题只有 `【V1】【APP】【训练】`，无现象描述）。
+- 先看 (b) 再看 (a)：若某模块的缺陷集中在同一批不可测需求上，问题在**需求**（回推 `analysis_gate.md` H1），不是缺陷单烂。
+- **不要**为了把数字做好看，硬把 `undecidable` 塞进 `escaped`——那会把逃逸率做成恐吓指标，两个月后没人再信这张表。
+
+**20. 一个缺陷挂了 5 条用例，DDF 要不要加 5？——不要；另有"范围性用例"要单独排除**
+- `DDF` 分子按**用例**去重（一条用例关联 5 个缺陷只算 1）；逃逸率的分母按**缺陷**去重（一个缺陷挂 5 条用例只算 1 个缺陷）。
+- 另一个坑：一条用例关联 5 个缺陷，**不要**当成"高价值用例"奖励——它可能只是一条范围性用例（步骤含 `逐一/依次/分别`，一条覆盖 24 个子场景）。这类用例要按 `range_case` 排除在 DDF 排名之外，否则整个模块的发现力会被一条聚合用例顶满。
+- 同理，模块级指标前必须先做归一：`设备端` / `横屏端` / `竖屏端` 这类端级标签不是功能模块，直接当模块会算出「横屏端 100% 逃逸」这种正确但没用的结论。
+
 ## Resources
 
 ### references/
@@ -255,6 +303,7 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `quality_prescreen.md` — 质量预审 10 项清单与阈值、三个检查点。
 - `coverage_audit.md` — **用例覆盖率评审（逆向评审）**：两个使用时机（生成后自审 / 存量用例库评审）、三项能力（多格式解析 / 模块级覆盖率 / 三类缺口 G1·G2·G3）、匹配口径（显式标注优先、模块名只作候选）、六节报告结构、**双向追溯（RTM）与 Excel 第二 sheet**（需求→用例 / 用例→需求 / 部分覆盖 / 孤儿用例）、报告如何用（不要平摊工作量）。
 - `mutation_review.md` — **用例强度评审（需求层变异）**：为什么"覆盖 ≠ 测得出错"（预审第 7 项与覆盖率的判据上限）、六类口径（变异体 / 有效 / 杀死 / 得分 / 零强度规则 / 零贡献用例）、9 类算子库与配额取舍、**`killer_pattern` 规范（防假杀死，本能力唯一正确性要害）**、报告结构与回填优先级、阻断范围与阈值校准、已知局限。
+- `defect_loop.md` — **缺陷反哺评审（真实缺陷层）**：能力边界（**「漏」可自动判、「拦」不行**，实测 `escaped` 5/5、`suspected` 0/5）、四态口径与强判别要素、指标（逃逸率区间 / DDF / DER 可算性 / 回归缺陷率）、7 类缺口与回填顺序（补断言优先于补用例）、数据前置（发现阶段字段 / 执行结果 / `coverage_rule` 锚点三缺）、10 类踩坑、六道闸门与回环。
 - `workflow.md` — 质量保障机制总览：分析 / 预审 / 强度 / 评分 / 记忆**五道闸门**如何衔接 + 可选技术加速器（6 步流程细节见本 SKILL.md）。
 - `data_rules.md` — 数据-规则映射库（测试数据校验规则）；优先级模型见 `case_design.md` / `priority_p0_p3.md`，评分 rubric 见 `quality_standards.md`。
 - `priority_p0_p3.md` — **P0–P3 分级策略**（优先级分级的唯一权威来源）：P0 可行性/概念性测试（横屏主流程 + 竖屏移植等价 + 各端联调）→ P1 主流程必测（横屏 UI 流程图拆解 / 等价类含异常 / 横屏布局适配 / AI 数据准确性 / 设备监控灵敏度 / 数据安全）→ P2 显示完整性 → P3 美观与兼容（旋转布局 / 响应式 / Android·iOS 兼容 / 认证性能）；含五维评分 D1–D5 + 硬规则 R1–R7 + 各级范围/执行/评审/示例 + 质量属性与分端映射 + 分级 SOP。全技能统一采用 P0–P3 四级（无 P4）。
@@ -270,7 +319,9 @@ PRD + 图片并存时交叉验证；只有图片时从图派生需求，无法�
 - `prescreen.py` — Step 5 质量预审闸门（10 项：覆盖率 / P0 / P2 占比 / 方法关联 / 无编造 / 无重复 / 预期可判定 / 标题规范·编号唯一 / 场景构成配额 / 孤儿用例；P0、P2、场景门槛、孤儿上限均可配，支持 6 方法）。
 - `coverage_audit.py` — Step 6 覆盖率评审（模块级下钻）：用例 `.json`/`.xlsx` × `requirements.json` → Markdown/JSON 报告，识别 G1 缺失 / G2 场景失衡 / G3 名义覆盖。
 - `mutation_audit.py` — Step 5.5 强度闸门（默认 `--mut-gate p0`，P0 规则 <90% 阻断）：用例 × `requirements.json` → 变异得分 + 零强度规则 + 零贡献用例；自动抽 TEXT/PRI/BND/NUM/NEG/DEL/ENUM **七类**变异体，`--semantic` 可挂 ORD/STM/IDEM，`--explain` 逐条排查 `killer_pattern`；支持 `.xlsx` 直读；变异体过少的规则判「证据不足」不误伤；P0 不可测量按未验证阻断（`unmeasurable_accepted` 可登记豁免）。
-- `to_excel.py` — Step 6 用例 JSON → `.xlsx`（10 列），`--emit-template` 生成模板。
+- `to_excel.py` — Step 6 用例 JSON → `.xlsx`（10 列），`--emit-template` 生成模板；`--with-environment` / `--with-remark` / `--with-defect` 可叠加为 11–13 列。
+- `defect_audit.py` — Step 6.5 缺陷反哺评审（**默认不阻断**）：缺陷单（× 用例库）→ 数据体检 + 四态判定（`escaped` 可靠 / `suspected` 仅候选）+ 逃逸率区间 + DDF + 零覆盖模块 + 7 类缺口回填草案；`--layer 1|2|3`、`--module-map`、`--gate off|warn`（默认 off）、`--prevented-mode`（默认 off）。
+- `selftest_defect.py` — `defect_audit.py` 离线自测（17 项断言，自包含 fixture，不联网不依赖 openpyxl）。
 - `to_xmind.py` — Step 6 用例 JSON → `.xmind`（可选输出）。
 - `score_testcases.py` — Step 6 结构化评分器（4 维逐项判定，任一维度 <90 触发回退）。
 - `memory_io.py` — 项目记忆读写器（init / record / load）。

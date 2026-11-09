@@ -39,9 +39,11 @@ except ImportError:
 COLUMNS = ["用例编号", "测试模块", "用例名称", "优先级", "测试类型", "前置条件", "测试步骤", "预期结果", "适用阶段", "设计方法"]
 COLUMNS_WITH_ENV = COLUMNS[:5] + ["测试环境"] + COLUMNS[5:]
 COLUMN_REMARK = "备注"
+COLUMN_DEFECT = "关联缺陷"
 WIDTHS = [10, 16, 24, 8, 12, 34, 42, 42, 10, 24]
 WIDTHS_WITH_ENV = WIDTHS[:5] + [36] + WIDTHS[5:]
 WIDTH_REMARK = 60
+WIDTH_DEFECT = 28
 PRIORITY_SET = {"P0", "P1", "P2", "P3"}
 
 
@@ -67,7 +69,18 @@ def dm_to_str(dm):
     return " / ".join(dm)
 
 
-def case_row(c, seq, with_env=False, with_remark=False):
+def defect_to_str(v):
+    """关联缺陷：字符串原样；数组用「；」拼接；空值留空。"""
+    if not v:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (list, tuple)):
+        return "；".join(str(x) for x in v if str(x).strip())
+    return str(v)
+
+
+def case_row(c, seq, with_env=False, with_remark=False, with_defect=False):
     cid = c.get("id") or f"TC-{seq:03d}"
     core = [
         cid,
@@ -87,25 +100,31 @@ def case_row(c, seq, with_env=False, with_remark=False):
     row = core + (env if with_env else []) + tail
     if with_remark:
         row = row + [c.get("remark", "")]
+    if with_defect:
+        row = row + [defect_to_str(c.get("defect"))]
     return row
 
 
-def build_workbook(cases, with_env=False, with_remark=False):
+def build_workbook(cases, with_env=False, with_remark=False, with_defect=False):
     wb = Workbook()
     ws = wb.active
     ws.title = "功能测试用例"
     header_fill = PatternFill("solid", fgColor="305496")
     header_font = Font(bold=True, color="FFFFFF")
     wrap = Alignment(vertical="top", wrap_text=True)
-    cols = (COLUMNS_WITH_ENV if with_env else COLUMNS) + ([COLUMN_REMARK] if with_remark else [])
+    cols = ((COLUMNS_WITH_ENV if with_env else COLUMNS)
+            + ([COLUMN_REMARK] if with_remark else [])
+            + ([COLUMN_DEFECT] if with_defect else []))
     ws.append(cols)
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = wrap
     for i, c in enumerate(cases, 1):
-        ws.append(case_row(c, i, with_env, with_remark))
-    widths = (WIDTHS_WITH_ENV if with_env else WIDTHS) + ([WIDTH_REMARK] if with_remark else [])
+        ws.append(case_row(c, i, with_env, with_remark, with_defect))
+    widths = ((WIDTHS_WITH_ENV if with_env else WIDTHS)
+              + ([WIDTH_REMARK] if with_remark else [])
+              + ([WIDTH_DEFECT] if with_defect else []))
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = w
     for row in ws.iter_rows(min_row=2):
@@ -115,7 +134,9 @@ def build_workbook(cases, with_env=False, with_remark=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="测试用例 JSON → Excel（默认 10 列；--with-environment 插入测试环境列；--with-remark 追加备注列）")
+    ap = argparse.ArgumentParser(
+        description="测试用例 JSON → Excel（默认 10 列；--with-environment 插入测试环境列；"
+                    "--with-remark 追加备注列；--with-defect 追加关联缺陷列，可叠加）")
     ap.add_argument("input", nargs="?", help="用例 JSON 文件路径")
     ap.add_argument("-o", "--output", required=False, help="输出 .xlsx 路径")
     ap.add_argument("--emit-template", metavar="PATH", help="仅生成空白模板到指定路径")
@@ -123,6 +144,8 @@ def main():
                     help="输出 11 列：在「前置条件」前增加「测试环境」列（双前置列实证模式）")
     ap.add_argument("--with-remark", action="store_true",
                     help="在末尾追加「备注」列（范围性用例逐项展开子场景操作用）")
+    ap.add_argument("--with-defect", action="store_true",
+                    help="在末尾追加「关联缺陷」列（Step 6.5 缺陷反哺后回填；可与前两个参数叠加）")
     ap.add_argument("--with-rtm", metavar="REQUIREMENTS",
                     help="在第二个 sheet 追加「需求追溯」矩阵（需 requirements.json）")
     args = ap.parse_args()
@@ -131,8 +154,9 @@ def main():
         wb = Workbook()
         ws = wb.active
         ws.title = "功能测试用例"
-        cols = (COLUMNS_WITH_ENV if args.with_environment else COLUMNS) + (
-            [COLUMN_REMARK] if args.with_remark else [])
+        cols = ((COLUMNS_WITH_ENV if args.with_environment else COLUMNS)
+                + ([COLUMN_REMARK] if args.with_remark else [])
+                + ([COLUMN_DEFECT] if args.with_defect else []))
         ws.append(cols)
         from openpyxl.styles import Font, PatternFill, Alignment
         fill = PatternFill("solid", fgColor="305496")
@@ -146,9 +170,15 @@ def main():
         sample_tail = ["1. 用户已注册\n2. 网络正常",
                        "1. 输入手机号\n2. 输入密码\n3. 点击登录", "1. 接受输入\n2. 掩码显示\n3. 跳转首页",
                        "功能测试", "场景法 / 等价类划分"]
-        ws.append(sample_core + (sample_env if args.with_environment else []) + sample_tail)
-        widths = (WIDTHS_WITH_ENV if args.with_environment else WIDTHS) + (
-            [WIDTH_REMARK] if args.with_remark else [])
+        sample = sample_core + (sample_env if args.with_environment else []) + sample_tail
+        if args.with_remark:
+            sample = sample + ["【场景展开·2 项】…"]
+        if args.with_defect:
+            sample = sample + ["BUG-1234567（已修复）"]
+        ws.append(sample)
+        widths = ((WIDTHS_WITH_ENV if args.with_environment else WIDTHS)
+                  + ([WIDTH_REMARK] if args.with_remark else [])
+                  + ([WIDTH_DEFECT] if args.with_defect else []))
         for i, w in enumerate(widths, 1):
             ws.column_dimensions[chr(64 + i)].width = w
         wb.save(args.emit_template)
@@ -169,7 +199,7 @@ def main():
     if bad:
         print(f"[警告] 以下用例优先级非法（应为 P0-P3）: {bad[:10]}", file=sys.stderr)
 
-    wb = build_workbook(cases, args.with_environment, args.with_remark)
+    wb = build_workbook(cases, args.with_environment, args.with_remark, args.with_defect)
     if args.with_rtm:
         try:
             import coverage_audit
@@ -182,7 +212,8 @@ def main():
         except Exception as e:
             print(f"[警告] 需求追溯 sheet 生成失败: {e}", file=sys.stderr)
     wb.save(args.output)
-    ncol = len(COLUMNS) + (1 if args.with_environment else 0) + (1 if args.with_remark else 0)
+    ncol = (len(COLUMNS) + (1 if args.with_environment else 0)
+            + (1 if args.with_remark else 0) + (1 if args.with_defect else 0))
     print(f"[✓] 已生成 Excel: {args.output}（{len(cases)} 条用例，{ncol} 列）")
     return 0
 
