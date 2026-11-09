@@ -111,5 +111,7 @@ python scripts/to_excel.py --emit-template "test-case-design/examples/testcases/
 ```
 
 > 说明：`id / test_type / stage` 为可选展示字段；`module / name / priority / precondition / steps / expected` 为必需；
+> **标题字段规范名是 `name`**，`title` 作为历史别名被全链路（`prescreen` / `coverage_audit` / `to_excel`）同时接受，两者都给时以 `name` 为准。
+> `steps` / `expected` 规范为「`1. 2. 3.` 换行分隔的字符串」，但写成数组（`["第一步","第二步"]`）也会被自动归一化，不会报错。
 > `test_data / coverage_rule / design_method` 供质量预审（`prescreen.py`）与覆盖分析（`map_coverage.py`）使用；
 > `defect`（可选，字符串）仅在 `--with-defect` 时导出。

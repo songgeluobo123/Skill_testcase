@@ -85,7 +85,7 @@ def case_row(c, seq, with_env=False, with_remark=False, with_defect=False):
     core = [
         cid,
         c.get("module", "未分类"),
-        c.get("name") or "",
+        c.get("name") or c.get("title") or "",
         normalize_priority(c.get("priority")),
         c.get("test_type") or "功能测试",
     ]

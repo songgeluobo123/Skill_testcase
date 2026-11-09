@@ -164,9 +164,26 @@ def norm_module(m):
     return re.sub(r"^\d+(\.\d+)*\s*", "", m or "").strip()
 
 
+def case_title(c):
+    """name 优先、title 兜底。
+
+    字段契约分裂的历史坑：output_format.md 与 to_excel.py 用 `name`，
+    本脚本早期只读 `title`，导致按规范写出的用例在报告里标题全空。
+    """
+    if not isinstance(c, dict):
+        return ""
+    for k in ("name", "title"):
+        v = c.get(k)
+        if isinstance(v, (list, tuple)):
+            v = " ".join(str(x) for x in v)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return ""
+
+
 def case_text(c):
     return " ".join([
-        str(c.get("title", "")), str(c.get("steps", "")),
+        case_title(c), str(c.get("steps", "")),
         str(c.get("expected", "")), str(c.get("precondition", "")),
         str(c.get("coverage_rule", "")),
     ])
@@ -175,7 +192,7 @@ def case_text(c):
 def classify(c):
     """返回 (是否负向, 是否权限类)。test_type 优先，缺失时用关键词。"""
     tt = str(c.get("test_type", ""))
-    text = " ".join([tt, str(c.get("title", "")), str(c.get("steps", ""))])
+    text = " ".join([tt, case_title(c), str(c.get("steps", ""))])
     is_perm = any(k in text for k in PERM_KEYS)
     if "异常" in tt or "边界" in tt:
         return True, is_perm
@@ -365,10 +382,10 @@ def build_rtm(cases, rules, threshold=0.08, top=3):
                 continue
             if weak:
                 weak_only.append({"id": cid, "module": c.get("module", ""),
-                                  "title": c.get("title", ""), "hint": weak[:3]})
+                                  "title": case_title(c), "hint": weak[:3]})
             else:
                 orphans.append({"id": cid, "module": c.get("module", ""),
-                                "title": c.get("title", "")})
+                                "title": case_title(c)})
 
     rows = []
     for rid, r in rule_by_id.items():

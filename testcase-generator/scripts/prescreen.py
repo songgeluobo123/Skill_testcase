@@ -105,7 +105,20 @@ def load_cases(path):
 
 
 def norm(s):
-    return re.sub(r"\s+", "", s or "")
+    """归一化用于去重比较。
+
+    契约上 steps/expected 是「1. 2. 3.」换行分隔的字符串（见 output_format.md），
+    但模型实际输出数组的比例很高。这里必须同时吃 str 与 list/tuple/set：
+    早期版本只处理 str，遇到数组会在第 6 项抛 TypeError ——
+    后续第 7~13 项全部不执行，而退出码仍是 1，会被误读成"预审不通过"。
+    """
+    if isinstance(s, (list, tuple, set)):
+        s = "\n".join(str(x) for x in s)
+    elif s is None:
+        s = ""
+    elif not isinstance(s, str):
+        s = str(s)
+    return re.sub(r"\s+", "", s)
 
 
 def as_list(v):
@@ -116,9 +129,27 @@ def as_list(v):
     return []
 
 
+def case_title(c):
+    """取用例标题。
+
+    字段契约分裂的历史坑：output_format.md 与 to_excel.py 用 `name`，
+    而本脚本早期只读 `title`。结果是**完全按规范写出的用例**会在第 8 项被判
+    "标题为空" 而全量阻断。这里统一为「name 优先，title 兜底」，两种都收。
+    """
+    if not isinstance(c, dict):
+        return ""
+    for k in ("name", "title"):
+        v = c.get(k)
+        if isinstance(v, (list, tuple)):
+            v = " ".join(str(x) for x in v)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return ""
+
+
 def case_text(c):
     """标题 + 步骤 + 预期 的合并文本（用于负向/权限关键词判定）。"""
-    return " ".join([str(c.get("title", "")), str(c.get("steps", "")),
+    return " ".join([case_title(c), str(c.get("steps", "")),
                      str(c.get("expected", ""))])
 
 
@@ -165,7 +196,7 @@ def condition_dims(c):
 def classify_case(c):
     """把单条用例判为 pos/neg，并判定是否属权限校验。口径与第 9 项、第 13 项共用。"""
     tt = str(c.get("test_type", ""))
-    text = " ".join([tt, str(c.get("title", "")), str(c.get("steps", ""))])
+    text = " ".join([tt, case_title(c), str(c.get("steps", ""))])
     is_perm = any(k in text for k in PERM_KEYS)
     if "异常" in tt or "边界" in tt or "权限" in tt:
         kind = "neg"
@@ -187,6 +218,10 @@ def main():
     ap.add_argument("--p0-max", type=float, default=0.15)
     ap.add_argument("--p2-min", type=float, default=0.35)
     ap.add_argument("--p2-max", type=float, default=0.45)
+    ap.add_argument("--ratio-tolerance", type=float, default=0.5,
+                    help="整数粒度补偿容差（单位：条，默认 0.5）。仅当占比区间在"
+                         "该总条数下不存在任何整数解时才生效；设 0 关闭补偿"
+                         "（5/6/11/12/13 条库的 P0 10%%~15%% 将永远无法通过）")
     ap.add_argument("--scene-min-cases", type=int, default=4,
                     help="模块场景构成检查的最小用例数门槛（默认 4，少于该数不判负向缺失）")
     ap.add_argument("--orphan-max", type=float, default=0.0,
@@ -267,14 +302,24 @@ def main():
            for p in PRIORITIES}
     p0r = cnt["P0"] / total
     p2r = cnt["P2"] / total
-    if not (args.p0_min <= p0r <= args.p0_max):
-        fails.append(f"P0 占比 {p0r:.0%} 不在 [{args.p0_min:.0%},{args.p0_max:.0%}]（当前 {cnt['P0']} 条）")
-    else:
-        print(f"[✓] P0 占比 {p0r:.0%}（{cnt['P0']} 条）")
-    if not (args.p2_min <= p2r <= args.p2_max):
-        fails.append(f"P2 占比 {p2r:.0%} 不在 [{args.p2_min:.0%},{args.p2_max:.0%}]（当前 {cnt['P2']} 条）")
-    else:
-        print(f"[✓] P2 占比 {p2r:.0%}（{cnt['P2']} 条）")
+    for label, key, ratio, lo, hi in (
+            ("P0", "P0", p0r, args.p0_min, args.p0_max),
+            ("P2", "P2", p2r, args.p2_min, args.p2_max)):
+        if lo <= ratio <= hi:
+            print(f"[✓] {label} 占比 {ratio:.0%}（{cnt[key]} 条）")
+            continue
+        # 整数粒度补偿：条数是整数，占比区间未必有整数解。
+        # 例：12 条库 P0 要 10%~15% → k/12 只有 8.3%(k=1) 与 16.7%(k=2)，两端口都出界，
+        # 无论怎么排优先级都过不了 —— 这是闸门的错，不是用例的错。
+        has_int_solution = any(lo <= i / total <= hi for i in range(0, total + 1))
+        if not has_int_solution:
+            tol = args.ratio_tolerance / total      # 容差按「条」折算成占比
+            if (lo - tol) <= ratio <= (hi + tol):
+                print(f"[✓] {label} 占比 {ratio:.0%}（{cnt[key]} 条）"
+                      f"｜整数粒度补偿：{total} 条库无法落在 {lo:.0%}~{hi:.0%}")
+                warns.append(f"{label} 占比按整数粒度补偿放行（{total} 条库该区间无整数解）")
+                continue
+        fails.append(f"{label} 占比 {ratio:.0%} 不在 [{lo:.0%},{hi:.0%}]（当前 {cnt[key]} 条）")
 
     # 4. 设计方法关联
     bad_dm = []
@@ -338,7 +383,7 @@ def main():
     title_map = {}
     for c in cases:
         cid = c.get("id", "?")
-        t = str(c.get("title", "") or "").strip()
+        t = case_title(c)
         if not t:
             bad_title.append((cid, "标题为空"))
         else:
