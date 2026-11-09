@@ -21,7 +21,7 @@ English version: [README.en.md](README.en.md)
 - 🧩 **功能点分解**：按页面/模块拆原子功能点，逐点产出测试点（5 维度）
 - 🎯 **四类场景配额**：每个功能点 `1 正向 : ≥3 异常·边界` 且 **≥1 条权限校验**（未登录/无权限/跨角色越权），只测顺利路径直接判场景失衡
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
-- 🛡️ **质量预审闸门（10 项）**：覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额 / **孤儿用例**，不达标不出库
+- 🛡️ **质量预审闸门（13 项）**：结构面 10 项（覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额 / 孤儿用例）+ 密度面 3 项（**逐需求密度 / 方法一致性 / 需求级场景配额**），不达标不出库
 - 🔍 **覆盖率评审（逆向）**：拿已有用例库回审需求，输出**模块级**覆盖率 + 三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖）；支持 `.xlsx` 直读，专治"全局 95% 掩盖某模块 40%"（见 `references/coverage_audit.md`）
 - 🧪 **强度闸门（默认 P0 阻断）**：需求层变异——假设需求被写错（阈值差一 / 边界方向写反 / 否定词去掉 / 动作漏做 / 文案改写），这条用例会不会变红？输出**零强度规则 / 零贡献用例**清单；**P0 规则 ≥90% 才放行**（P1–P3 只告警，`--mut-gate warn` 可切纯报告）。预审只保证结构，强度由 `scripts/mutation_audit.py` 兜底（见 `references/mutation_review.md`）
 - 🔗 **双向需求追溯（RTM）**：需求→用例（查漏测）+ 用例→需求（查孤儿），区分「全覆盖 / 部分覆盖 / 未覆盖」，可写入用例 Excel 的**第二个 sheet「需求追溯」**（`to_excel.py --with-rtm requirements.json`）
@@ -68,7 +68,7 @@ testcase-generator/
 │   ├── priority_p0_p3.md     # P0–P3 分级策略（优先级口径）
 │   ├── data_rules.md         # 数据-规则映射库（测试数据校验）
 │   ├── quality_standards.md  # 4 大质量标准 + 0–100 评分 rubric
-│   ├── quality_prescreen.md  # 质量预审 10 项闸门与阈值
+│   ├── quality_prescreen.md  # 质量预审 13 项闸门与阈值
 │   ├── coverage_audit.md     # ★覆盖率评审（逆向）：模块级下钻 + G1/G2/G3 缺口
 │   ├── mutation_review.md    # ★强度闸门（P0 阻断）：需求层变异 + 零强度规则 + killer_pattern 规范
 │   ├── defect_loop.md        # ★缺陷反哺评审（真实缺陷层）：逃逸缺口 G4 + 缺口分类 + 回填顺序
@@ -77,7 +77,7 @@ testcase-generator/
 └── scripts/                 # 可执行脚本（13 个，Python 3.14/3.13）
     ├── extract_requirements.py  # Step1 抽取需求规则清单
     ├── map_coverage.py          # 用例↔需求规则覆盖映射
-    ├── prescreen.py             # 质量预审闸门（10 项）
+    ├── prescreen.py             # 质量预审闸门（13 项）
     ├── coverage_audit.py        # 覆盖率评审（模块级下钻 + 缺口报告）
     ├── mutation_audit.py        # 强度审计（需求层变异，实验性，默认 warn 不阻断）
     ├── score_testcases.py       # 质量评分
@@ -145,7 +145,7 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. 覆盖映射
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. 质量预审闸门（10 项，不达标会列出缺口）
+# 4. 质量预审闸门（13 项，不达标会列出缺口；后 3 项密度闸门默认 warn）
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 

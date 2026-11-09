@@ -21,7 +21,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 🧩 **Function-point decomposition**: break requirements into atomic function points, produce test points per point (5 dimensions)
 - 🎯 **Four-scenario quota**: per function point, `1 positive : ≥3 negative/boundary` and **≥1 permission case** (not logged in / no permission / cross-role escalation); happy-path-only modules are flagged as imbalanced
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
-- 🛡️ **Quality prescreen gate (10 checks)**: coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota — fails the gate, no release
+- 🛡️ **Quality prescreen gate (13 checks)**: 10 structural checks (coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota / orphan cases) + 3 depth checks (**per-requirement density / method-consistency / requirement-level scenario quota**) — fails the gate, no release
 - 🔍 **Coverage audit (reverse direction)**: review an existing case library against requirements and produce **module-level** coverage plus three gap types (G1 missing / G2 imbalanced scenarios / G3 nominal coverage); reads `.xlsx` directly (see `references/coverage_audit.md`)
 - 🧪 **Strength gate (blocks on P0 by default)**: requirement-level mutation — if the requirement were implemented wrongly (off-by-one threshold / inverted boundary / dropped negation / skipped action / reworded copy), would this case go red? Emits a **zero-strength rules / zero-contribution cases** list; **P0 rules must reach 90%** (P1–P3 warn only; `--mut-gate warn` switches to report-only). Prescreen only guarantees structure; strength is covered by `scripts/mutation_audit.py` (see `references/mutation_review.md`)
 - 🕳️ **Defect loop (escape-driven, non-blocking by default)**: use **real defects** as external ground truth and back-compute "why the library stayed green when this bug happened" — outputs the **escaped-defect list**, **zero-coverage modules** (0 cases but real incidents) and **7 assertion-gap classes** (numeric / verbatim text / result-state / uniqueness / negation / boundary / phenomenon) plus a regression-backfill draft. Scope is deliberately narrowed to **"misses" are auto-judgeable, "caught" only as candidates** (human agreement on auto-judged catches: 0/5), so no interception rate is claimed and `--gate` defaults to `off` (see `references/defect_loop.md`)
@@ -67,7 +67,7 @@ testcase-generator/
 │   ├── priority_p0_p3.md     # P0–P3 grading strategy (priority)
 │   ├── data_rules.md         # Data-rule mapping library (test-data validation)
 │   ├── quality_standards.md  # 4 quality standards + 0–100 scoring rubric
-│   ├── quality_prescreen.md  # Quality prescreen 9 gates & thresholds
+│   ├── quality_prescreen.md  # Quality prescreen 13 gates & thresholds
 │   ├── coverage_audit.md     # ★ coverage audit (reverse): module drill-down + G1/G2/G3 gaps
 │   ├── mutation_review.md    # ★ strength gate (P0 blocking): requirement-level mutation + killer_pattern spec
 │   ├── defect_loop.md        # ★Defect loop (real-defect layer): escape gap G4 + gap classes + backfill order
@@ -76,7 +76,7 @@ testcase-generator/
 └── scripts/                 # Executable scripts (13, Python 3.13/3.14)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
-    ├── prescreen.py             # Quality prescreen gate (9 checks)
+    ├── prescreen.py             # Quality prescreen gate (13 checks)
     ├── coverage_audit.py        # Coverage audit (module drill-down + gap report)
     ├── mutation_audit.py        # Strength audit (requirement-level mutation, experimental, warn by default)
     ├── score_testcases.py       # Quality scoring
@@ -144,7 +144,7 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. coverage mapping
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. quality prescreen gate (10 checks; lists gaps if it fails)
+# 4. quality prescreen gate (13 checks; the 3 depth gates default to warn)
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 
