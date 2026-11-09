@@ -2,6 +2,21 @@
 
 本文件记录 Skills 仓库（WorkBuddy 技能集合）的发布历史。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [1.8.2] - 2026-11-09
+
+> 主题：**收缩仓库范围**——按老大决定，撤下三个项目耦合度高的技能，仓库回归「通用测试能力」定位。
+
+### 移除
+
+- **`testcase-module-deepdive/`、`testcase-triclass-audit/`、`test-plan-generator/`** 三个技能从仓库与本地技能目录一并移除（连同各自 `SKILL.md`）。
+  - 移除原因：三者都**强绑定具体项目的表结构与脚本**（`organize_cases.py` / `final_check.py`、D 列=设备型号、P 列=归类编号、固定的桌面模板路径），换项目基本要重写，不适合作为通用技能对外发布；`test-plan-generator` 另有引用已失效技能名（`tencent-local-office-edit` / `tencent-docs-routing`）与过时口径（`P0-P4`）的问题。
+  - 本地文件已备份至 `_trash_skills_20261109/`（逐个校验字节一致后才移除），需要恢复时可直接拷回 `~/.workbuddy/skills/`。
+
+### 变更
+
+- 根 `README.md` / `README.en.md` 技能索引收缩为 2 个，组合用法表同步精简。
+- `[1.8.1]` 条目保留原样，作为历史记录；其列出的三个技能已在 `[1.8.2]` 撤下。
+
 ## [1.8.1] - 2026-11-09
 
 > 主题：**仓库级同步**——把本地已有的测试技能全部纳入仓库，并把根 README 从"过期重复内容"改回纯索引。
