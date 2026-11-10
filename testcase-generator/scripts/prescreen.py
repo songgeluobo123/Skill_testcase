@@ -286,6 +286,41 @@ def _lines(v):
     return [x for x in str(v or "").split("\n") if x.strip()]
 
 
+# 顺序编号条目：1. / 1、 / 1． 且后面不接数字。
+# 「后面不接数字」是为了放过 3.8-4.4 km/h、v1.0、1.15 秒 这类数值——
+# 它们长得像编号，但一条断言里出现几次都不代表"多条断言"。
+ITEM_SEQ_RE = re.compile(r"(?<!\d)(\d{1,2})\s*[.、．](?!\d)")
+
+
+def numbered_items(v):
+    """数 "1. 2. 3. …" 递增编号的条目数；断链即停。
+
+    断链即停是刻意的：宁可少数，不能把 「1. … 2. … 3.8-4.4 km/h … 4. …」
+    里被数值挡掉的 3 之后硬凑成 4 条。少数 = 少报范围性用例，方向是安全的。
+    """
+    text = "\n".join(_lines(v))
+    n, expect = 0, 1
+    for m in ITEM_SEQ_RE.finditer(text):
+        if int(m.group(1)) == expect:
+            n += 1
+            expect += 1
+    return n
+
+
+def n_assert(v):
+    """预期断言条数 = max(换行/数组条数, 顺序编号条目数)。
+
+    **为什么不能只数换行**：真实 Excel 用例库常把多条断言塞进同一个单元格，
+    甚至把 "2." 直接贴在上句末尾（"…无中文残留2. 特殊字符…"），既不换行也不空格。
+    只数换行会把 5 条断言当成 1 条，把正常的多断言用例全判成范围性用例。
+    实测某真实库：只数换行命中 234 条，改用本口径降到 14 条——220 条是假阳性。
+
+    反过来，JSON 形态的用例预期是数组，此时 len(_lines) 已经准确，
+    max() 不会比它更大，所以本口径对两种输入形态都成立。
+    """
+    return max(len(_lines(v)), numbered_items(v))
+
+
 def range_evidence(c):
     """第 14 项：判定"范围性用例"——一条用例覆盖多个并列场景。
 
@@ -307,7 +342,7 @@ def range_evidence(c):
         objs = max(objs, len(segs))
     if not hit_words or objs < 2:
         return False, objs, 0, []
-    return True, objs, len(_lines(c.get("expected"))), sorted(set(hit_words))
+    return True, objs, n_assert(c.get("expected")), sorted(set(hit_words))
 
 
 def main():
