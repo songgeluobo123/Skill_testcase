@@ -22,7 +22,7 @@ Writing test cases by hand hits three recurring problems: **incomplete requireme
 - 🎯 **Four-scenario quota**: per function point, `1 positive : ≥3 negative/boundary` and **≥1 permission case** (not logged in / no permission / cross-role escalation); happy-path-only modules are flagged as imbalanced
 - 📊 **Equivalence / boundary matrix (mandatory Step 3.5)**: enumerate each field's equivalence classes and boundary points, **one item per row**, each pointing back to concrete cases; `matrix_lint.py` blocks boundary-point shortage, unconsumed classes, fabricated requirement IDs, `[assumption]` over 30%, and column shift. It is the only fuel for the density gate — without it, "6 cases" just rephrases the same test
 - 🎯 **Priority model**: unified P0–P3 scale (no P4) — P0 feasibility/concept testing, P1 main-flow must-test, P2 display completeness, P3 aesthetics & compatibility; P0 is release-blocking; share thresholds are adjustable per project at checkpoint ① (see "Priority model" below)
-- 🛡️ **Quality prescreen gate (13 checks)**: 10 structural checks (coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota / orphan cases) + 3 depth checks (**per-requirement density / method-consistency / requirement-level scenario quota**). Note: the density check is **off by default** (`--min-cases-per-rule 0`) and the other two only warn
+- 🛡️ **Quality prescreen gate (14 checks)**: 10 structural checks (coverage / method linkage / no fabrication / no duplication / priority share / expected-result checkability / title & unique ID / scenario-composition quota / orphan cases) + 4 depth checks (**per-requirement density / method-consistency / requirement-level scenario quota / range-case detection**). Note: the density check is **off by default** (`--min-cases-per-rule 0`) and checks 12-14 only warn; **the Step 5 template hard-writes all four to `block`** — a green run on defaults alone is fake green
 - 🔍 **Coverage audit (reverse direction)**: review an existing case library against requirements and produce **module-level** coverage plus three gap types (G1 missing / G2 imbalanced scenarios / G3 nominal coverage); reads `.xlsx` directly (see `references/coverage_audit.md`)
 - 🧪 **Strength gate (blocks on P0 by default)**: requirement-level mutation — if the requirement were implemented wrongly (off-by-one threshold / inverted boundary / dropped negation / skipped action / reworded copy), would this case go red? Emits a **zero-strength rules / zero-contribution cases** list; **P0 rules must reach 90%** (P1–P3 warn only; `--mut-gate warn` switches to report-only). Prescreen only guarantees structure; strength is covered by `scripts/mutation_audit.py` (see `references/mutation_review.md`)
 - 🕳️ **Defect loop (escape-driven, non-blocking by default)**: use **real defects** as external ground truth and back-compute "why the library stayed green when this bug happened" — outputs the **escaped-defect list**, **zero-coverage modules** (0 cases but real incidents) and **7 assertion-gap classes** (numeric / verbatim text / result-state / uniqueness / negation / boundary / phenomenon) plus a regression-backfill draft. Scope is deliberately narrowed to **"misses" are auto-judgeable, "caught" only as candidates** (human agreement on auto-judged catches: 0/5), so no interception rate is claimed and `--gate` defaults to `off` (see `references/defect_loop.md`)
@@ -67,18 +67,19 @@ testcase-generator/
 │   ├── multimodal.md         # Multimodal UI reading (image → cases)
 │   ├── excellent_case_patterns.md # ★ evidence-based patterns (10 practices + self-check + anti-patterns)
 │   ├── priority_p0_p3.md     # P0–P3 grading strategy (priority)
+│   ├── data_rules.json       # Executable data-rule library template (6 types)
 │   ├── data_rules.md         # Data-rule mapping library (test-data validation)
 │   ├── quality_standards.md  # 4 quality standards + 0–100 scoring rubric
-│   ├── quality_prescreen.md  # Quality prescreen 13 gates & thresholds
+│   ├── quality_prescreen.md  # Quality prescreen 14 gates & thresholds
 │   ├── coverage_audit.md     # ★ coverage audit (reverse): module drill-down + G1/G2/G3 gaps
 │   ├── mutation_review.md    # ★ strength gate (P0 blocking): requirement-level mutation + killer_pattern spec
 │   ├── defect_loop.md        # ★Defect loop (real-defect layer): escape gap G4 + gap classes + backfill order
 │   ├── workflow.md           # Quality-assurance overview (five gates + one retrospective + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (17, Python 3.13/3.14)
+└── scripts/                 # Executable scripts (18, Python 3.13/3.14)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
-    ├── prescreen.py             # Quality prescreen gate (13 checks)
+    ├── prescreen.py             # Quality prescreen gate (14 checks)
     ├── matrix_lint.py           # Step 3.5 matrix lint (boundary count / unconsumed classes / column shift)
     ├── coverage_audit.py        # Coverage audit (module drill-down + gap report)
     ├── mutation_audit.py        # Strength audit (requirement-level mutation, experimental, warn by default)
@@ -89,7 +90,11 @@ testcase-generator/
     ├── to_xmind.py              # Export XMind
     ├── read_xmind.py            # Parse XMind input
     ├── read_ui_image.py         # Multimodal UI screenshot reading
-    └── memory_io.py             # Memory read/write
+    ├── memory_io.py             # Memory read/write
+    └── doc_stats.py             # Doc-count gate (--check verify / --apply auto-fix)
+└── tests/                   # Regression (`python tests/run_all.py`, path-independent)
+    ├── run_all.py               # Run every regression (incl. scripts/selftest_*.py)
+    └── test_*.py                # Prescreen / matrix / coverage audit / contract / exit codes / range cases / counts
 ```
 
 ### Layering (responsibilities & boundaries)
@@ -101,7 +106,7 @@ testcase-generator/
 | **B. Case authoring** | `case_design.md` (authority), `naming_rules.md`, `output_format.md`, `xmind_output.md`, `excellent_case_patterns.md` (evidence layer) | Defines "how a case is written": field rules, naming red-lines, Excel/XMind containers, proven patterns & anti-patterns |
 | **A. Methodology** | `function_points.md`, `test_methods.md`, `testpoint_checklist.md`, `multimodal.md` | Defines "how to design" (decompose / methods / test points / reading) |
 | **C. Priority** | `priority_p0_p3.md` | P0–P3 grading (sole priority authority) |
-| **D. Data rules** | `data_rules.md` | Test-data validation mapping only |
+| **D. Data rules** | `data_rules.json` (executable) + `data_rules.md` (spec) | Test-data validation mapping only; `json` is machine-read, `md` is human-read |
 | **E. Quality** | `quality_standards.md`, `quality_prescreen.md`, `coverage_audit.md`, `mutation_review.md` (strength gate), `defect_loop.md` (defect loop), `workflow.md`, `memory_mechanism.md` | Defines "how to verify": standards/scoring, prescreen gates, coverage audit (module drill-down), strength audit (requirement-level mutation), defect loop (real-incident reconciliation), mechanism overview, memory |
 
 > **Boundary rule: each rule is defined exactly once (single source of truth).** `case_design.md` is the sole authority for case authoring; the priority model lives only in `priority_p0_p3.md` (P0–P3, sole authority); the scoring rubric lives only in `quality_standards.md`; data validation only in `data_rules.md`. Cross-references use "see xxx" instead of copying rules.
@@ -147,7 +152,7 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. coverage mapping
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. quality prescreen gate (13 checks; the 3 depth gates default to warn)
+# 4. quality prescreen gate (14 checks; the 4 depth gates are hard-wired to block in the Step 5 template)
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 

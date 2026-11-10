@@ -84,30 +84,64 @@ def load_cases(path):
 
 
 def validate_data_value(key, value, rules):
-    """返回 (ok, reason)。未知字段不扣分。"""
+    """按规则库校验一个测试数据取值，返回 (ok, reason)。未知字段不扣分。
+
+    支持的规则类型（见 references/data_rules.json 模板）：
+      phone  {pattern, hint}                     正则匹配（11 位手机号等）
+      amount {min, decimals, hint}               数值下限 + 小数位上限
+      range  {min, max, hint}                    数值区间（闭区间）
+      length {min, max, hint}                    字符串长度区间
+      regex  {pattern, hint}                     任意正则
+      enum   {values, hint}                      枚举白名单
+    """
     rule = rules.get(key)
     if rule is None:
         return True, ""
-    if rule["type"] == "phone":
+    hint = rule.get("hint") or key
+    t = rule.get("type")
+
+    if t == "phone":
         if re.match(rule["pattern"], str(value)):
             return True, ""
-        return False, f"{key}='{value}' 不符合 {rule['hint']}"
-    if rule["type"] == "amount":
+        return False, f"{key}='{value}' 不符合 {hint}"
+
+    if t in ("amount", "range"):
         try:
             v = float(value)
         except (TypeError, ValueError):
             return False, f"{key}='{value}' 不是合法数值"
-        if v < rule["min"]:
-            return False, f"{key}={v} 小于最小值 {rule['min']}"
-        txt = str(value)
-        if "." in txt and len(txt.split(".")[1]) > rule["decimals"]:
-            return False, f"{key}={value} 小数位超过 {rule['decimals']} 位"
+        lo = rule.get("min")
+        hi = rule.get("max")
+        if lo is not None and v < lo:
+            return False, f"{key}={v} 小于最小值 {lo}"
+        if hi is not None and v > hi:
+            return False, f"{key}={v} 大于最大值 {hi}"
+        if t == "amount":
+            decimals = rule.get("decimals", 2)
+            txt = str(value)
+            if "." in txt and len(txt.split(".")[1]) > decimals:
+                return False, f"{key}={value} 小数位超过 {decimals} 位"
         return True, ""
-    if rule["type"] == "enum":
+
+    if t == "length":
+        n = len(str(value))
+        lo = rule.get("min", 0)
+        hi = rule.get("max", 10 ** 9)
+        if not (lo <= n <= hi):
+            return False, f"{key}='{value}' 长度 {n} 不在 [{lo},{hi}]"
+        return True, ""
+
+    if t == "regex":
+        ok = bool(re.search(rule["pattern"], str(value)))
+        return (True, "") if ok else (False, f"{key}='{value}' 不符合 {hint}")
+
+    if t == "enum":
         if value in rule["values"]:
             return True, ""
         return False, f"{key}='{value}' 不在枚举 {rule['values']}"
-    return True, ""
+
+    # 未知 type 不静默放行：规则写错了要能看见，否则等于没配
+    return False, f"{key} 的规则 type='{t}' 不受支持（只认 phone/amount/range/length/regex/enum）"
 
 
 def score_case(case, rules):
@@ -197,7 +231,12 @@ def main():
     ap = argparse.ArgumentParser(description="测试用例结构化质量评分器")
     ap.add_argument("input", help="用例 JSON 文件路径，或 '-' 读取 stdin")
     ap.add_argument("--threshold", type=float, default=90.0, help="每个维度合格阈值，默认 90")
-    ap.add_argument("--rules", help="可选：自定义数据-规则映射库 JSON 路径")
+    ap.add_argument("--rules", help="可选：自定义数据-规则映射库 JSON 路径（模板见 "
+                                    "references/data_rules.json）")
+    ap.add_argument("--rules-mode", choices=["merge", "replace"], default="merge",
+                    help="--rules 与内置规则的关系：merge=合并（默认，保留内置三条）；"
+                         "replace=整体替换（早期行为，会静默丢掉内置规则，只在明确要时才用）")
+    ap.add_argument("--quiet", action="store_true", help="只输出结论，不打印提示")
     args = ap.parse_args()
 
     try:
@@ -206,14 +245,31 @@ def main():
         print(f"[错误] 读取/解析输入失败: {e}", file=sys.stderr)
         return 2
 
-    rules = DEFAULT_DATA_RULES
+    rules = dict(DEFAULT_DATA_RULES)
     if args.rules:
         try:
             with open(args.rules, "r", encoding="utf-8") as f:
-                rules = json.load(f)
+                ext = json.load(f)
         except Exception as e:
             print(f"[错误] 读取规则文件失败: {e}", file=sys.stderr)
             return 2
+        if not isinstance(ext, dict):
+            print("[错误] 规则文件需为对象：{\"字段名\": {\"type\": ...}}", file=sys.stderr)
+            return 2
+        if args.rules_mode == "replace":
+            rules = ext
+        else:
+            # 默认**合并**：只写项目自己的字段，不清掉内置的三条。
+            # 早期是整体替换，项目一传 --rules，手机号/订单金额/用户等级就不再校验了，
+            # 而且没有任何提示——配了规则反而丢掉规则，比不配更危险。
+            rules.update(ext)
+        if not args.quiet:
+            if args.rules_mode == "replace":
+                print(f"[i] 数据规则库：{len(rules)} 条（--rules-mode replace，"
+                      f"内置 {len(DEFAULT_DATA_RULES)} 条已被丢弃）")
+            else:
+                print(f"[i] 数据规则库：内置 {len(DEFAULT_DATA_RULES)} 条 + 外部 {len(ext)} 条"
+                      f" = {len(rules)} 条（--rules-mode merge）")
 
     if not cases:
         print("[警告] 未找到任何用例", file=sys.stderr)
@@ -249,4 +305,16 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # 退出码：0=通过 / 1=不达标 / 2=输入·参数错误 / 3=脚本自身崩溃。
+    # 3 必须与 1 分开：早期未捕获异常统一表现为 exit 1，会被误读成
+    # "数据不达标"，让人对着不存在的质量问题返工。
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        print("\n[内部错误] score_testcases.py 自身崩溃（exit 3），不是数据不达标。", file=sys.stderr)
+        print("请把下面的堆栈连同输入样例一起报给技能维护者：", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(3)

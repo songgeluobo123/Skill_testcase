@@ -126,4 +126,16 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # 退出码：0=通过 / 1=不达标 / 2=输入·参数错误 / 3=脚本自身崩溃。
+    # 3 必须与 1 分开：早期未捕获异常统一表现为 exit 1，会被误读成
+    # "数据不达标"，让人对着不存在的质量问题返工。
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        print("\n[内部错误] memory_io.py 自身崩溃（exit 3），不是数据不达标。", file=sys.stderr)
+        print("请把下面的堆栈连同输入样例一起报给技能维护者：", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(3)

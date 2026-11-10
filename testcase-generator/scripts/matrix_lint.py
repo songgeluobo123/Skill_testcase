@@ -158,6 +158,7 @@ def lint(rows, m, args, rule_ids=None, case_ids=None):
 
     total = len(rows)
     assume_rows = []
+    field_rows = {}          # 字段 → 数据行数（含 [假设] 行），供 --assume-stats 用
     need_len = max(m.values()) + 1
 
     for idx, row in enumerate(rows, 1):
@@ -168,6 +169,7 @@ def lint(rows, m, args, rule_ids=None, case_ids=None):
                            f"（列错位会让类别/预期/用例 ID 全部读错）"))
             continue
         f = cell(row, m, "field")
+        field_rows[f or "(空字段)"] = field_rows.get(f or "(空字段)", 0) + 1
         tp = base_type(cell(row, m, "type"))
         pt = cell(row, m, "point")
         kd_raw = cell(row, m, "kind")
@@ -275,10 +277,11 @@ def lint(rows, m, args, rule_ids=None, case_ids=None):
                        f"标 [假设] 的行 {len(assume_rows)} 条（占比 {assume_ratio:.0%}），"
                        f"不计入有效覆盖，需回溯数据字典/需求确认"))
 
-    return per_field, issues, assume_rows, assume_ratio
+    return per_field, issues, assume_rows, assume_ratio, field_rows
 
 
-def render(per_field, issues, assume_rows, assume_ratio, total, args, tables_used):
+def render(per_field, issues, assume_rows, assume_ratio, total, args, tables_used,
+           field_rows=None):
     L = []
     blocks = [i for i in issues if i[0] == "block"]
     warns = [i for i in issues if i[0] == "warn"]
@@ -366,7 +369,10 @@ def main():
     ap.add_argument("--min-boundary", type=int, default=3,
                     help="数值/枚举字段的边界点下限（默认 3）")
     ap.add_argument("--assume-max", type=float, default=0.30,
-                    help="[假设] 行占比上限（默认 0.30）")
+                    help="[假设] 行占比上限（默认 0.30，**经验值尚未实证校准**；"
+                         "用 --assume-stats 看分布，攒够样本后取 P90 回改）")
+    ap.add_argument("--assume-stats", action="store_true",
+                    help="打印每个字段的 [假设] 行占比，用于校准 --assume-max")
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON，用于校验 R-ID 非编造")
     ap.add_argument("--cases", help="用例 JSON，用于校验矩阵引用的用例 ID 真实存在")
     ap.add_argument("-o", "--output", help="报告输出路径（默认 stdout）")
@@ -417,7 +423,7 @@ def main():
             raw = raw["cases"]
         case_ids = {str(c.get("id", "")).strip() for c in raw if isinstance(c, dict)}
 
-    per_field, issues, assume_rows, ratio = lint(rows, m, args, rule_ids, case_ids)
+    per_field, issues, assume_rows, ratio, field_rows = lint(rows, m, args, rule_ids, case_ids)
     blocks = [i for i in issues if i[0] == "block"]
 
     if args.format == "json":
@@ -435,7 +441,25 @@ def main():
         }
         out = json.dumps(payload, ensure_ascii=False, indent=2)
     else:
-        out = render(per_field, issues, assume_rows, ratio, len(rows), args, used)
+        out = render(per_field, issues, assume_rows, ratio, len(rows), args, used,
+                     field_rows=field_rows)
+
+    if args.assume_stats and not args.quiet:
+        # 假设占比分布：默认 --assume-max 0.30 **至今没有实证校准**（手上只有 1 份真实矩阵，
+        # 且因取自已确认需求，假设行占比为 0%，样本量根本不够）。所以这里不猜默认值，
+        # 改成把观测值打出来，让项目自己攒数据：攒够 ≥5 份真实矩阵后取 P90 再回改默认值。
+        by_field = {}
+        for _, f, _ in assume_rows:
+            by_field[f or "(空字段)"] = by_field.get(f or "(空字段)", 0) + 1
+        print("\n=== [假设] 行分布（用于校准 --assume-max，当前默认 0.30 属经验值）===")
+        print(f"{'字段':24s} {'假设行':>6s} {'数据行':>6s} {'占比':>7s}")
+        for f in sorted(field_rows):
+            n_all = field_rows[f]
+            n_as = by_field.get(f, 0)
+            print(f"{f:24s} {n_as:6d} {n_all:6d} {n_as / n_all:7.0%}")
+        print(f"{'合计':24s} {len(assume_rows):6d} {len(rows):6d} {ratio:7.0%}")
+        print("> 校准方法：收集 ≥5 份真实项目矩阵，统计各项目合计占比，取 P90 作为新的 "
+              "--assume-max；在此之前保持 0.30 并在报告里标注『经验值、未校准』。")
 
     if args.output:
         io.open(args.output, "w", encoding="utf-8").write(out)
@@ -450,4 +474,16 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # 退出码：0=通过 / 1=不达标 / 2=输入·参数错误 / 3=脚本自身崩溃。
+    # 3 必须与 1 分开：早期未捕获异常统一表现为 exit 1，会被误读成
+    # "数据不达标"，让人对着不存在的质量问题返工。
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        print("\n[内部错误] matrix_lint.py 自身崩溃（exit 3），不是数据不达标。", file=sys.stderr)
+        print("请把下面的堆栈连同输入样例一起报给技能维护者：", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(3)

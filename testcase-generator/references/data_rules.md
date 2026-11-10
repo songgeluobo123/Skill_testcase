@@ -17,6 +17,29 @@
 }
 ```
 
+### 可执行版：`data_rules.json`（真正会被校验的那份）
+
+上面是给人看的说明，**真正参与校验的是 `references/data_rules.json`**。复制它到项目里按真实字段改，然后：
+
+```bash
+python scripts/score_testcases.py cases.json --rules ./data_rules.json
+```
+
+**默认是「合并」**（`--rules-mode merge`）：只写项目特有字段即可，内置的手机号/订单金额/用户等级三条不会被顶掉。早期是整体替换，导致「配了自己的规则 → 内置规则静默失效」，配了反而比不配少校验三字段——这类坑现在用 `--rules-mode replace` 显式开启才出现。
+
+支持六种规则类型：
+
+| type | 字段 | 用途 |
+| --- | --- | --- |
+| `phone` | `pattern` `hint` | 正则匹配（手机号等固定格式） |
+| `amount` | `min` `decimals` `hint` | 金额下限 + 小数位上限 |
+| `range` | `min` `max` `hint` | 数值闭区间（SOC 0~100、档位 0~5） |
+| `length` | `min` `max` `hint` | 字符串长度区间（验证码 6 位） |
+| `regex` | `pattern` `hint` | 任意正则（MAC、IMEI、序列号） |
+| `enum` | `values` `hint` | 枚举白名单 |
+
+> `type` 写错**不会静默放行**：会返回「不受支持的 type」，确保规则写错时能立刻看见，而不是以为配了就生效了。
+
 规则要点：
 
 - **手机号**：11 位数字，常见前缀 138/139 等；不得出现 "12345"（长度不足）或含字母。

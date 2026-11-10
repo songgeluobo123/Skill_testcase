@@ -11,7 +11,7 @@
 |---|---|---|---|
 | **分析闸门（analysis gate）** | Step 1 出口（最前置） | 方向闸门：需求理解与测试范围未被确认，**不得进入生成** | `analysis_gate.md`（两阶段流程 + STOP & ASK + 硬约束 H1–H5） |
 | **矩阵（matrix）** | Step 3.5（生成前的**供料**闸门） | 供料闸门：穷举字段的等价类与边界点，给密度闸门提供"这 6 条各测什么" | `equivalence_matrix.md` + `scripts/matrix_lint.py`（L1–L9，边界点 <3 / 未消费等价类 / 编造 / 假设超限 阻断） |
-| **预审（prescreen）** | Step 5 出口（生成前） | 放行闸门：保证"结构合理、不漏不重、方法到位、预期可判定" | `quality_prescreen.md` + `scripts/prescreen.py`（13 项检查：结构 10 + 密度 3） |
+| **预审（prescreen）** | Step 5 出口（生成前） | 放行闸门：保证"结构合理、不漏不重、方法到位、预期可判定" | `quality_prescreen.md` + `scripts/prescreen.py`（14 项检查：结构 10 + 密度 4） |
 | **强度闸门（mutation）** | Step 5.5 出口（导出前） | 真实性闸门：保证"**实现写错时这些用例会红**" | `mutation_review.md` + `scripts/mutation_audit.py`（P0 规则 ≥90% 阻断） |
 | **评分（score）** | Step 6 出口（生成后） | 质量终审：逐条 0–100 量化（覆盖/准确/可执行/优先级） | `quality_standards.md` 评分 rubric + `scripts/score_testcases.py` |
 | **记忆（memory）** | Step 1 读取 / Step 6 写回 | 跨会话沉淀偏好与判断，越用越准 | `memory_mechanism.md` + `scripts/memory_io.py` |

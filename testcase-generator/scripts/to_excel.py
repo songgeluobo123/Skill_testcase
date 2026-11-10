@@ -32,9 +32,13 @@ import sys
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill
+    HAS_OPENPYXL = True
 except ImportError:
-    print("[错误] 缺少依赖 openpyxl，请先安装: pip install openpyxl", file=sys.stderr)
-    sys.exit(2)
+    # 不在 import 期退出：那样连 --help 都看不了（早期就是这么坏的，
+    # 还顺手把"缺依赖"报成 exit 2 = 参数错）。改为入库一个标志，
+    # 由 main() 在做实事之前拒绝，并返回 4（环境缺依赖）。
+    Workbook = Font = Alignment = PatternFill = None
+    HAS_OPENPYXL = False
 
 COLUMNS = ["用例编号", "测试模块", "用例名称", "优先级", "测试类型", "前置条件", "测试步骤", "预期结果", "适用阶段", "设计方法"]
 COLUMNS_WITH_ENV = COLUMNS[:5] + ["测试环境"] + COLUMNS[5:]
@@ -150,6 +154,13 @@ def main():
                     help="在第二个 sheet 追加「需求追溯」矩阵（需 requirements.json）")
     args = ap.parse_args()
 
+    if not HAS_OPENPYXL:
+        print("[错误] 缺少依赖 openpyxl，无法导出 Excel。装法: pip install openpyxl",
+              file=sys.stderr)
+        print("       （退出码 4 = 环境缺依赖。既不是参数错，也不是数据不达标，"
+              "别去改用例或改参数）", file=sys.stderr)
+        return 4
+
     if args.emit_template:
         wb = Workbook()
         ws = wb.active
@@ -219,4 +230,17 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # 退出码：0=通过 / 1=不达标 / 2=输入·参数错误 / 3=脚本自身崩溃 / 4=环境缺依赖。
+    # 3 必须与 1 分开：早期未捕获异常统一表现为 exit 1，会被误读成
+    # "数据不达标"，让人对着不存在的质量问题返工。
+    # 4 必须与 2 分开：缺 openpyxl 报成 2 时，调用方会去改参数而不是装包。
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        print("\n[内部错误] to_excel.py 自身崩溃（exit 3），不是数据不达标。", file=sys.stderr)
+        print("请把下面的堆栈连同输入样例一起报给技能维护者：", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(3)

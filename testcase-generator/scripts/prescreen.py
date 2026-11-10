@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-prescreen.py — 测试用例质量预审器（正式生成前的 13 项闸门）
+prescreen.py — 测试用例质量预审器（正式生成前的 14 项闸门）
 
 检查项（详见 references/quality_prescreen.md）：
   1. 需求覆盖率 >= coverage_min（需 --requirement-rules 提供需求规则清单）
@@ -18,7 +18,7 @@ prescreen.py — 测试用例质量预审器（正式生成前的 13 项闸门�
   10. 孤儿用例（无 coverage_rule 且未标 exploratory=true）：默认**直接阻断**；
       可用 --orphan-max 放宽为阈值告警（如 0.1 允许 10%）
 
-  —— 以下 3 项为"密度与深度"闸门（默认 warn，灰度后切 block）——
+  —— 以下 4 项为"密度与深度"闸门（默认 warn，灰度后切 block）——
 
   11. 需求密度（M1）：每条需求用例数 >= --min-cases-per-rule（默认 0=关闭，建议 6）。
       按 coverage_rule **显式回指**计数，不做文本猜测；--density-exempt 可豁免简单需求
@@ -28,19 +28,27 @@ prescreen.py — 测试用例质量预审器（正式生成前的 13 项闸门�
       判定表法/正交分析法→步骤须含≥2 个条件维度
   13. 需求级场景配额（M6）：每条**需求**至少 1 条异常/边界用例（模块级第 9 项的向下钻取，
       防"大模块掩盖小需求"）
+  14. 范围性用例（M4 兜底）：步骤含 逐一/依次/分别/遍历… 且并列 ≥--range-min-objs 个对象、
+      但预期只有 1 条断言 → 判"一条用例吃掉 N 个场景"。第 9/11/13 项都只数条数，
+      数不出"4 条覆盖 16 个场景"，本项补上这个缺口。备注列已展开的降级为弱提示。
 
 退出码：
   0  —— 全部通过（或仅警告）
   1  —— 存在不达标项（需修正后重跑）
   2  —— 输入/参数错误
+  3  —— 内部错误（脚本自身崩溃；**与 1 严格区分**，见下）
+
+> 为什么必须有 3：早期所有非 0 都返回 1，脚本崩溃（如 steps 传数组抛 TypeError）会被
+> 误读成"用例质量不达标"，让人对着不存在的质量问题返工。崩溃必须可区分。
 
 用法：
   python prescreen.py cases.json --requirement-rules requirements.json
   python prescreen.py cases.json --p0-min 0.40 --p0-max 0.60
   python prescreen.py cases.json            # 仅结构闸门（第 1 项覆盖率需清单，自动跳过）
-  # 密度与深度闸门（建议复杂项目显式打开）
+  # 密度与深度闸门（Step 5 模板：全部显式 block）
   python prescreen.py cases.json --requirement-rules requirements.json \
-         --min-cases-per-rule 6 --density-mode block --method-check block
+         --min-cases-per-rule 6 --density-mode block --method-check block \
+         --scene-rule-mode block --range-mode block
 
 优先级采用 P0-P3（P0 最高，一票否决）；全技能统一，无 P4。
 可判定性、标题检查、场景配额的依据见 references/excellent_case_patterns.md
@@ -79,14 +87,25 @@ BOUNDARY_WORDS = ["大于", "小于", "等于", "≥", "≤", ">", "<", "超过"
 # 边界值分析：0/100 这类"值本身就是边界"的字面量（无比较词也成立，如"展示 0%"）
 BOUNDARY_LITERAL = re.compile(r"0\s*(?:%|％|km/h|公里|格|档|元|分钟|小时|秒|次)"
                               r"|100\s*(?:%|％)|满电|满格|满量程|满信号")
-# 等价类划分：类归属词
+# 等价类划分：类归属词（含"X值"型表述——用例里更常写"传空值/传非法值"而不是"无效类"）
 EQ_CLASS_WORDS = ["有效类", "无效类", "合法", "非法", "边界外", "异常类", "等价类",
-                  "取值", "枚举", "类别", "集合"]
+                  "取值", "枚举", "类别", "集合",
+                  "有效值", "无效值", "合法值", "非法值", "越界值", "空值",
+                  "超限值", "正常值", "异常值", "边界值"]
 # 判定表法 / 正交分析法：条件维度线索
 COND_CUES = ["当", "若", "如果", "条件", "且", "同时", "分别", "组合", "取值", "场景"]
 # 判定表法 / 正交分析法：一行内显式并列 ≥3 个取值（如"已添加已连接/已添加未连接/未添加已连接"）
 ALT_GROUP_RE = re.compile(r"[^/\n]{1,24}(?:/[^/\n]{1,24}){2,}")
 NUMBER_RE = re.compile(r"\d")
+
+# 检查 14：范围性用例（M4 兜底）——一条用例覆盖多个并列场景
+# 词表口径与 defect_audit.py 的 ENUM_WORDS 对齐（那边已用于把范围性用例排除出 DDF 排名），
+# 另补"全部/所有/每个/各个"这类更强的全域量词。
+RANGE_WORDS = ("逐一", "逐个", "依次", "分别", "遍历", "逐项", "逐条",
+               "全部", "所有", "每个", "各个")
+# 并列对象分隔符：顿号与斜杠是中文用例里最主流的并列写法；
+# 不切「和/及/与」——这三个字在中文里高频出现在词内部（"和值""及时""与其"），切了必然误伤。
+OBJ_SPLIT_RE = re.compile(r"[、/／]")
 
 
 
@@ -102,6 +121,45 @@ def load_cases(path):
     if isinstance(data, list):
         return data
     raise ValueError("输入需为用例数组，或含 'cases' 键的对象")
+
+
+# 词表可在运行时被 --method-lexicon 增补（**合并，不是替换**——替换会让加词时
+# 一不小心丢掉全部内置词，然后闸门静默失效）。
+LEXICON = {
+    "boundary": list(BOUNDARY_WORDS),
+    "boundary_literal": BOUNDARY_LITERAL.pattern,
+    "eq_class": list(EQ_CLASS_WORDS),
+    "cond": list(COND_CUES),
+}
+
+
+def load_lexicon(path):
+    """读取外部词表并合并进 LEXICON；返回增补的词数，供启动时打印。
+
+    格式（每一项都可选，只写要增补的）：
+      {"boundary": ["临界值","满量程"], "eq_class": ["档位值"], "cond": ["在…时"],
+       "boundary_literal": "正则字符串（替换内置正则）"}
+    """
+    with open(path, encoding="utf-8") as f:
+        ext = json.load(f)
+    if not isinstance(ext, dict):
+        raise ValueError("--method-lexicon 需为对象：{boundary/eq_class/cond/boundary_literal}")
+    added = 0
+    for key in ("boundary", "eq_class", "cond"):
+        vals = ext.get(key) or []
+        if not isinstance(vals, list):
+            raise ValueError(f"--method-lexicon 的 {key} 必须是字符串数组")
+        for w in vals:
+            w = str(w).strip()
+            if w and w not in LEXICON[key]:
+                LEXICON[key].append(w)
+                added += 1
+    lit = ext.get("boundary_literal")
+    if lit:
+        re.compile(lit)                      # 语法错了要在这里就炸，不要等到判用例时
+        LEXICON["boundary_literal"] = lit
+        added += 1
+    return added
 
 
 def norm(s):
@@ -175,11 +233,23 @@ def test_data_values(c):
     return [v for v in vals if v and v not in ("-", "N/A", "NA")]
 
 
+_BOUNDARY_LIT_RE = None
+
+
+def boundary_literal_re():
+    """按 LEXICON 里的正则在首次使用时编译；词表被 --method-lexicon 改过会重编。"""
+    global _BOUNDARY_LIT_RE
+    pat = LEXICON["boundary_literal"]
+    if _BOUNDARY_LIT_RE is None or _BOUNDARY_LIT_RE.pattern != pat:
+        _BOUNDARY_LIT_RE = re.compile(pat)
+    return _BOUNDARY_LIT_RE
+
+
 def boundary_evidence(c):
     """边界值分析的落地证据：返回 (是否含比较/极值词, 是否含 0/100 边界字面量, 是否含数字)。"""
     t = body_text(c)
-    return (any(w in t for w in BOUNDARY_WORDS),
-            bool(BOUNDARY_LITERAL.search(t)),
+    return (any(w in t for w in LEXICON["boundary"]),
+            bool(boundary_literal_re().search(t)),
             bool(NUMBER_RE.search(t)))
 
 
@@ -187,7 +257,7 @@ def condition_dims(c):
     """判定表/正交的条件维度数：条件线索句 + 显式并列取值组（≥3 个用 / 并列）。"""
     steps = str(c.get("steps", "") or "")
     segs = [s for s in re.split(r"[\n;；]", steps) if s.strip()]
-    dims = sum(1 for s in segs if any(w in s for w in COND_CUES))
+    dims = sum(1 for s in segs if any(w in s for w in LEXICON["cond"]))
     if ALT_GROUP_RE.search(steps):
         dims += 1
     return dims
@@ -209,8 +279,39 @@ def classify_case(c):
     return kind, is_perm
 
 
+def _lines(v):
+    """把 steps / expected 统一成非空行列表（兼容字符串与数组两种写法）。"""
+    if isinstance(v, (list, tuple)):
+        return [str(x) for x in v if str(x).strip()]
+    return [x for x in str(v or "").split("\n") if x.strip()]
+
+
+def range_evidence(c):
+    """第 14 项：判定"范围性用例"——一条用例覆盖多个并列场景。
+
+    返回 (是否命中, 并列对象数, 预期断言条数, 命中的范围词列表)。
+
+    **只看 steps**：预期里出现"逐一显示 3 项"是合法表述，不能当证据。
+    这与第 12 项「标题不作证据」是同一条原则——证据必须落在实际执行动作上。
+
+    并列对象数只按顿号/斜杠切分。切「和/及/与」会误伤（"和值""及时""与其"），
+    宁可少报也不要把正常用例判成范围性用例。
+    """
+    objs, hit_words = 0, []
+    for ln in _lines(c.get("steps")):
+        ws = [w for w in RANGE_WORDS if w in ln]
+        if not ws:
+            continue
+        hit_words.extend(ws)
+        segs = [p for p in OBJ_SPLIT_RE.split(ln) if len(p.strip()) >= 2]
+        objs = max(objs, len(segs))
+    if not hit_words or objs < 2:
+        return False, objs, 0, []
+    return True, objs, len(_lines(c.get("expected"))), sorted(set(hit_words))
+
+
 def main():
-    ap = argparse.ArgumentParser(description="测试用例质量预审器（13 项闸门）")
+    ap = argparse.ArgumentParser(description="测试用例质量预审器（14 项闸门）")
     ap.add_argument("input", help="用例 JSON 文件路径")
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON（字符串数组）")
     ap.add_argument("--coverage-min", type=float, default=0.95)
@@ -239,9 +340,30 @@ def main():
                     help="第13项需求级场景配额强度（默认 warn）")
     ap.add_argument("--min-neg-per-rule", type=int, default=3,
                     help="第13项：每条需求至少有 1 条负向即不阻断；少于该数（默认 3）仅告警")
+    ap.add_argument("--method-lexicon",
+                    help="第12项方法一致性词表 JSON（与内置词表**合并**，只写要增补的词）。"
+                         "格式：{\"boundary\":[...],\"eq_class\":[...],\"cond\":[...],"
+                         "\"boundary_literal\":\"正则\"}。中文表达千变万化，固定词表必然漏判，"
+                         "项目侧可按领域术语补充")
+    ap.add_argument("--range-mode", choices=["off", "warn", "block"], default="warn",
+                    help="第14项范围性用例校验强度（默认 warn）。"
+                         "Step 5 命令模板里硬写 block——这是目前唯一没有兜底的敞口")
+    ap.add_argument("--range-min-objs", type=int, default=3,
+                    help="第14项：并列对象数达到该值且预期仅 1 条断言，判范围性用例（默认 3）")
+    ap.add_argument("--range-weak-mode", choices=["off", "warn"], default="warn",
+                    help="第14项弱证据（有范围词但对象数不足）是否告警（默认 warn）")
     args = ap.parse_args()
 
     exempt_rules = {x.strip() for x in args.density_exempt.split(",") if x.strip()}
+
+    if args.method_lexicon:
+        try:
+            added = load_lexicon(args.method_lexicon)
+        except Exception as e:
+            print(f"[错误] 读取/解析方法词表失败: {e}", file=sys.stderr)
+            return 2
+        print(f"[i] 方法词表已合并：+{added} 条（boundary {len(LEXICON['boundary'])} / "
+              f"eq_class {len(LEXICON['eq_class'])} / cond {len(LEXICON['cond'])}）")
 
     try:
         cases = load_cases(args.input)
@@ -532,7 +654,7 @@ def main():
                         fake.append((cid, m, "无具体数值"))
                 elif m == "等价类划分":
                     n = len(set(test_data_values(c)))
-                    if n >= 2 or any(w in t for w in EQ_CLASS_WORDS):
+                    if n >= 2 or any(w in t for w in LEXICON["eq_class"]):
                         continue
                     if n == 1:
                         thin.append((cid, "仅 1 个取值，未枚举等价类集合"))
@@ -593,6 +715,48 @@ def main():
         else:
             print(f"[✓] 各需求均含异常/边界类用例（需求级）")
 
+    # 14. 范围性用例（M4 兜底）：一条用例覆盖多个并列场景
+    #     第 9/11/13 项都只数"条数"，数不出"4 条覆盖 16 个场景"这种情况——
+    #     这是 13 项闸门里唯一没有兜底判据的地方，本项补上。
+    if args.range_mode != "off":
+        strong, weak = [], []
+        for c in cases:
+            cid = c.get("id", "?")
+            hit, objs, n_exp, words = range_evidence(c)
+            if not hit:
+                continue
+            # 备注列已做场景展开的，降级为弱证据——case_design.md 第七节允许
+            # "预期同构的批量校验"用备注展开，这条豁免必须留出口，否则会误伤。
+            has_remark = bool(str(c.get("remark") or "").strip())
+            if objs >= args.range_min_objs and n_exp <= 1:
+                # 备注列已逐项展开的，降级为弱提示——case_design.md 第七节允许
+                # "预期同构的批量校验"用备注展开，这条豁免必须留出口，否则会误伤。
+                (weak if has_remark else strong).append((cid, objs, n_exp, words))
+            elif n_exp <= 1 and not has_remark:
+                weak.append((cid, objs, n_exp, words))
+        if strong:
+            msg = (f"{len(strong)} 条范围性用例：步骤含「{'/'.join(RANGE_WORDS[:7])}」且并列 "
+                   f"{args.range_min_objs}+ 个对象，但预期只有 1 条断言"
+                   f"（一条用例吃掉 N 个场景）: "
+                   + "、".join(f"{cid}({objs}对象)" for cid, objs, _, _ in strong[:10])
+                   + ("…" if len(strong) > 10 else ""))
+            if args.range_mode == "block":
+                fails.append(msg)
+            else:
+                warns.append(msg)
+            print(f"[!] 范围性用例：{len(strong)} 条（建议拆条，或在备注列逐项展开场景）")
+            for cid, objs, n_exp, words in strong[:15]:
+                print(f"      {cid:16s} 对象 {objs} 个 · 预期 {n_exp} 条 · 命中「{words[0]}」")
+            if len(strong) > 15:
+                print(f"      … 其余 {len(strong) - 15} 条见汇总消息")
+        else:
+            print(f"[✓] 无范围性用例（单条用例未覆盖多个并列场景）")
+        if weak and args.range_weak_mode != "off":
+            warns.append(f"{len(weak)} 条用例疑似范围性（含范围词但并列对象不足 "
+                         f"{args.range_min_objs} 个，或已在备注列展开），仅提示: "
+                         + "、".join(cid for cid, _, _, _ in weak[:10])
+                         + ("…" if len(weak) > 10 else ""))
+
     print()
     if fails:
         print("=== 预审不通过，需修正后重跑 ===")
@@ -608,4 +772,17 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # 退出码 3 = 脚本自身崩溃。必须与 1（用例不达标）区分开：
+    # 早期未捕获异常统一表现为 exit 1，会被误读成"预审不通过"，导致对着
+    # 不存在的质量问题返工（steps 传数组崩溃那次就是这样藏了很久）。
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        print("\n[内部错误] prescreen.py 自身崩溃（exit 3），不是数据不达标。",
+              file=sys.stderr)
+        print("请把下面的堆栈连同输入样例一起报给技能维护者：", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(3)

@@ -22,7 +22,7 @@ English version: [README.en.md](README.en.md)
 - 🎯 **四类场景配额**：每个功能点 `1 正向 : ≥3 异常·边界` 且 **≥1 条权限校验**（未登录/无权限/跨角色越权），只测顺利路径直接判场景失衡
 - 📊 **等价类/边界值矩阵（Step 3.5 强制）**：逐字段穷举等价类与边界点，**一行一项**并回指到具体用例；`matrix_lint.py` 拦「边界点 <3 / 未消费等价类 / 编造需求 / `[假设]` 超 30% / 列错位」。它是密度闸门的**唯一燃料**——没有矩阵，补出来的 6 条只是同一件事换说法
 - 🎯 **优先级模型**：P0–P3 四级统一口径（无 P4）——P0 可行性/概念性测试、P1 主流程必测、P2 显示完整性、P3 美观与兼容；P0 一票否决；占比阈值可在检查点①按项目调整（详见下文「优先级模型」）
-- 🛡️ **质量预审闸门（13 项）**：结构面 10 项（覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额 / 孤儿用例）+ 密度面 3 项（**逐需求密度 / 方法一致性 / 需求级场景配额**）。注意**第 11 项默认关闭**（`--min-cases-per-rule 0`），需显式开启；第 12/13 项默认只告警
+- 🛡️ **质量预审闸门（14 项）**：结构面 10 项（覆盖率 / 方法关联 / 无编造 / 无重复 / 优先级占比 / 预期可判定 / 标题规范与编号唯一 / 场景构成配额 / 孤儿用例）+ 密度面 4 项（**逐需求密度 / 方法一致性 / 需求级场景配额 / 范围性用例**）。注意**第 11 项默认关闭**（`--min-cases-per-rule 0`），需显式开启；第 12/13/14 项默认只告警。**Step 5 模板把四项一律硬写 `block`**——靠默认值跑出来的全绿是假绿
 - 🔍 **覆盖率评审（逆向）**：拿已有用例库回审需求，输出**模块级**覆盖率 + 三类缺口（G1 缺失 / G2 场景失衡 / G3 名义覆盖）；支持 `.xlsx` 直读，专治"全局 95% 掩盖某模块 40%"（见 `references/coverage_audit.md`）
 - 🧪 **强度闸门（默认 P0 阻断）**：需求层变异——假设需求被写错（阈值差一 / 边界方向写反 / 否定词去掉 / 动作漏做 / 文案改写），这条用例会不会变红？输出**零强度规则 / 零贡献用例**清单；**P0 规则 ≥90% 才放行**（P1–P3 只告警，`--mut-gate warn` 可切纯报告）。预审只保证结构，强度由 `scripts/mutation_audit.py` 兜底（见 `references/mutation_review.md`）
 - 🔗 **双向需求追溯（RTM）**：需求→用例（查漏测）+ 用例→需求（查孤儿），区分「全覆盖 / 部分覆盖 / 未覆盖」，可写入用例 Excel 的**第二个 sheet「需求追溯」**（`to_excel.py --with-rtm requirements.json`）
@@ -68,18 +68,19 @@ testcase-generator/
 │   ├── multimodal.md         # 多模态读图（图→用例）
 │   ├── excellent_case_patterns.md # ★优秀用例实证模式（10 做法 + 自检清单 + 反面清单）
 │   ├── priority_p0_p3.md     # P0–P3 分级策略（优先级口径）
+│   ├── data_rules.json       # 可执行的数据校验规则库模板（六种 type）
 │   ├── data_rules.md         # 数据-规则映射库（测试数据校验）
 │   ├── quality_standards.md  # 4 大质量标准 + 0–100 评分 rubric
-│   ├── quality_prescreen.md  # 质量预审 13 项闸门与阈值
+│   ├── quality_prescreen.md  # 质量预审 14 项闸门与阈值
 │   ├── coverage_audit.md     # ★覆盖率评审（逆向）：模块级下钻 + G1/G2/G3 缺口
 │   ├── mutation_review.md    # ★强度闸门（P0 阻断）：需求层变异 + 零强度规则 + killer_pattern 规范
 │   ├── defect_loop.md        # ★缺陷反哺评审（真实缺陷层）：逃逸缺口 G4 + 缺口分类 + 回填顺序
 │   ├── workflow.md           # 质量保障机制总览（六道闸门 + 一道事后复盘 + 技术加速器）
 │   └── memory_mechanism.md   # 记忆机制
-└── scripts/                 # 可执行脚本（17 个，Python 3.14/3.13）
+└── scripts/                 # 可执行脚本（18 个，Python 3.14/3.13）
     ├── extract_requirements.py  # Step1 抽取需求规则清单
     ├── map_coverage.py          # 用例↔需求规则覆盖映射
-    ├── prescreen.py             # 质量预审闸门（13 项）
+    ├── prescreen.py             # 质量预审闸门（14 项）
     ├── matrix_lint.py           # Step3.5 矩阵 lint（边界点/未消费等价类/编造/假设占比/列错位）
     ├── coverage_audit.py        # 覆盖率评审（模块级下钻 + 缺口报告）
     ├── mutation_audit.py        # 强度审计（需求层变异，实验性，默认 warn 不阻断）
@@ -90,7 +91,11 @@ testcase-generator/
     ├── to_xmind.py              # 导出 XMind
     ├── read_xmind.py            # 解析 XMind 输入
     ├── read_ui_image.py         # 多模态读 UI 截图
-    └── memory_io.py             # 记忆读写
+    ├── memory_io.py             # 记忆读写
+    └── doc_stats.py             # 文档计数一致性闸门（--check 校验 / --apply 自动回写）
+└── tests/                   # 回归（`python tests/run_all.py`，路径无关）
+    ├── run_all.py               # 一键跑全部回归（含 scripts/selftest_*.py）
+    └── test_*.py                # 预审 / 矩阵 / 覆盖审计 / 契约 / 退出码 / 范围性用例 / 计数
 ```
 
 ### 分层职责与边界
@@ -102,7 +107,7 @@ testcase-generator/
 | **B. 用例编写规范** | `case_design.md`（权威）、`naming_rules.md`、`output_format.md`、`xmind_output.md`、`excellent_case_patterns.md`（经验证据层） | 定义"用例怎么写"：字段写法、命名红线、Excel/XMind 容器、优秀范式与反面清单 |
 | **A. 方法论** | `function_points.md`、`test_methods.md`、`testpoint_checklist.md`、`multimodal.md` | 定义"如何设计"（拆解 / 方法 / 测试点 / 读图） |
 | **C. 优先级** | `priority_p0_p3.md` | P0–P3 分级策略（优先级唯一权威来源） |
-| **D. 数据规则** | `data_rules.md` | 仅测试数据校验映射库 |
+| **D. 数据规则** | `data_rules.json`（可执行规则库）+ `data_rules.md`（说明与口径） | 仅测试数据校验映射库；`json` 是机器读的那份，`md` 是人读的 |
 | **E. 质量保障** | `quality_standards.md`、`quality_prescreen.md`、`coverage_audit.md`、`mutation_review.md`（强度闸门）、`defect_loop.md`（缺陷反哺）、`workflow.md`、`memory_mechanism.md` | 定义"怎么验"：标准/评分、预审闸门、覆盖率评审（模块级下钻）、强度评审（需求层变异）、缺陷反哺（真实故障对账）、机制总览、记忆 |
 
 > **边界原则：每条规则只在一处定义（单一真相源）。** `case_design.md` 为用例编写规范唯一权威；优先级模型只存于 `priority_p0_p3.md`(P0–P3，唯一权威)；评分 rubric 只在 `quality_standards.md`；数据校验只在 `data_rules.md`。交叉处一律用"见 xxx"引用，不复制规则。
@@ -148,7 +153,7 @@ python scripts/extract_requirements.py path/to/PRD.md -o ./out
 # 3. 覆盖映射
 python scripts/map_coverage.py ./out/test_cases.json ./out/requirements.json -o ./out/test_cases_mapped.json
 
-# 4. 质量预审闸门（13 项，不达标会列出缺口；后 3 项密度闸门默认 warn）
+# 4. 质量预审闸门（14 项；后 4 项深度闸门在 Step 5 模板里一律 block）
 python scripts/prescreen.py ./out/test_cases_mapped.json \
     --requirement-rules ./out/requirement_rules.json --coverage-min 0.95
 
