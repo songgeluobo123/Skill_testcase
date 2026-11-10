@@ -129,28 +129,33 @@ check("D2 数组与字符串结论一致",
       f"array exit={r_list.returncode} str exit={r_str.returncode}")
 
 # ---------- D3 P0/P2 整数粒度补偿 ----------
+# 显式固定窄区间 [10%,15%]：本组测的是"补偿机制本身"，不该随 --p0-max 默认值漂移。
+# 默认值从 0.15 放宽到 0.25 后，12 条库放 2~3 条 P0 就有解了，不再触发补偿——
+# 若不固定区间，这些用例会从"测试补偿"悄悄退化成"测试默认值"。
+NARROW = ["--p0-max", "0.15"]
 for n, p0k in ((12, 1), (12, 2), (6, 1), (5, 1), (11, 1), (13, 2)):
-    r = run(build(n, p0k, 0, neg=True), tag=f"n{n}p{p0k}")
+    r = run(build(n, p0k, 0, neg=True), tag=f"n{n}p{p0k}", extra=NARROW)
     lines = [l for l in r.stdout.split("\n") if l.strip().startswith("[✓] P0")]
     ok = bool(lines) and "整数粒度补偿" in lines[0]
     check(f"D3 n={n} P0={p0k} 条触发补偿并通过", ok,
           lines[0] if lines else "无 P0 结论行")
 
 # 可达时必须精确判，不得补偿
-r_ok = run(build(20, 3, 8, neg=True), tag="n20exact")
+r_ok = run(build(20, 3, 8, neg=True), tag="n20exact", extra=NARROW)
 p0_line = [l for l in r_ok.stdout.split("\n") if l.strip().startswith("[✓] P0")]
 check("D3 n=20 可达时不打补偿标记",
       bool(p0_line) and "补偿" not in p0_line[0],
       p0_line[0] if p0_line else "无 P0 结论行")
 
 # 关闭补偿后，12 条库必须失败（证明补偿是显式行为，不是把闸门废掉）
-r_off = run(build(12, 1, 0, neg=True), extra=["--ratio-tolerance", "0"], tag="tol0")
+r_off = run(build(12, 1, 0, neg=True), extra=NARROW + ["--ratio-tolerance", "0"],
+            tag="tol0")
 check("D3 --ratio-tolerance 0 关闭补偿后 n=12 P0 失败",
       r_off.returncode == 1 and "P0 占比" in r_off.stdout,
       f"exit={r_off.returncode}")
 
 # 补偿只救"区间无整数解"，不救真的排错（20 条 0 条 P0 仍然必须失败）
-r_bad = run(build(20, 0, 8, neg=True), tag="n20zero")
+r_bad = run(build(20, 0, 8, neg=True), tag="n20zero", extra=NARROW)
 check("D3 补偿不豁免真实违规（20 条 0 条 P0 仍失败）",
       r_bad.returncode == 1 and "P0 占比" in r_bad.stdout,
       f"exit={r_bad.returncode}")

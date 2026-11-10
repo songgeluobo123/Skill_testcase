@@ -100,11 +100,13 @@ def json_has_key(path, keys):
 def xlsx_header_has(path, words):
     """读表头行（首个 sheet 第一行），判断是否含关键词。无 openpyxl 时静默跳过。"""
     try:
-        from openpyxl import load_workbook
+        from xlsx_util import open_workbook
     except ImportError:
         return False
     try:
-        wb = load_workbook(path, read_only=True, data_only=True)
+        # 不用 read_only：云端工具存过的文件 dimension 常是 A1:A1，会静默读 0 行，
+        # 把"表里没内容"误判成"输入就绪度低"
+        wb = open_workbook(path)
         ws = wb[wb.sheetnames[0]]
         head = ""
         for row in ws.iter_rows(values_only=True, max_row=1):

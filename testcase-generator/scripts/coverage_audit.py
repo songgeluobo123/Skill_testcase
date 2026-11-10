@@ -91,10 +91,11 @@ def load_cases(path):
 
 def _load_cases_xlsx(path):
     try:
-        from openpyxl import load_workbook
+        from xlsx_util import open_workbook
     except ImportError:
-        raise RuntimeError("读取 .xlsx 需要 openpyxl（pip install openpyxl）")
-    wb = load_workbook(path, read_only=True, data_only=True)
+        from .xlsx_util import open_workbook  # 作为包被 import 时
+    # 不用 read_only：云端工具存过的文件 dimension 常是 A1:A1，read_only 会静默读 0 行
+    wb = open_workbook(path)
     ws = wb[wb.sheetnames[0]]
     rows = list(ws.iter_rows(values_only=True))
     wb.close()

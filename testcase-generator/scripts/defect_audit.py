@@ -119,6 +119,52 @@ CASE_HEADER_ALIASES = {
 }
 
 
+# ---------------------------------------------------------------- 结果码语义
+
+# 不同项目用不同字母，语义必须钉死——否则"还没测"会被算成"跑过但失败"。
+# 实测：某正式库 1669 条已执行用例里有 45 条 NP，早年实现把"有结果就算执行过"，
+# 于是 NP 抬高执行率、掩盖真实进度；更糟的是部分统计把 NP 当"非通过"，
+# 让"本阶段还没排上"混进缺陷漏测口径。
+RESULT_PASS = ("PASS", "通过", "OK", "P")
+RESULT_FAIL = ("FAIL", "失败", "不通过", "NG", "F")
+RESULT_PENDING = ("NP",)                       # 当前阶段需要测试，但尚未执行
+RESULT_NOT_RUN = ("NT", "未测试", "未执行", "NOTEST")
+RESULT_BLOCKED = ("BLOCK", "BLOCKED", "阻塞")
+
+
+def classify_result(raw):
+    """把结果码归一成 pass / fail / pending / not_run / blocked / unknown / empty。
+
+    NP（本阶段应测未测）归 **pending**，属于「未执行」而非「失败」。
+    这条区分直接影响两件事：执行进度是否被虚高、以及"未测"会不会被算成"漏测"。
+    """
+    s = norm(raw).upper()
+    if not s:
+        return "empty"
+    if s in RESULT_PASS:
+        return "pass"
+    if s in RESULT_FAIL:
+        return "fail"
+    if s in RESULT_PENDING:
+        return "pending"
+    if s in RESULT_NOT_RUN:
+        return "not_run"
+    if s in RESULT_BLOCKED:
+        return "blocked"
+    # 兜底：包含式匹配（"PASS(见备注)"、"失败-环境问题" 这类）
+    if any(k in s for k in ("PASS", "通过")):
+        return "pass"
+    if any(k in s for k in ("FAIL", "失败")):
+        return "fail"
+    if "NP" in s:
+        return "pending"
+    if "NT" in s:
+        return "not_run"
+    if "BLOCK" in s or "阻塞" in s:
+        return "blocked"
+    return "unknown"
+
+
 # ---------------------------------------------------------------- 文本工具
 
 def norm(s):
@@ -214,10 +260,11 @@ def dedupe_bugs(bugs):
 
 def _load_bugs_xlsx(path):
     try:
-        from openpyxl import load_workbook
+        from xlsx_util import open_workbook
     except ImportError:
-        raise RuntimeError("读取 .xlsx 需要 openpyxl（pip install openpyxl）")
-    wb = load_workbook(path, read_only=True, data_only=True)
+        from .xlsx_util import open_workbook
+    # 不用 read_only：云端工具存过的文件 dimension 常是 A1:A1，会静默读 0 行
+    wb = open_workbook(path)
     ws = wb[wb.sheetnames[0]]
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
@@ -255,10 +302,11 @@ def load_cases(path):
 
 def _load_cases_xlsx(path):
     try:
-        from openpyxl import load_workbook
+        from xlsx_util import open_workbook
     except ImportError:
-        raise RuntimeError("读取 .xlsx 需要 openpyxl（pip install openpyxl）")
-    wb = load_workbook(path, read_only=True, data_only=True)
+        from .xlsx_util import open_workbook
+    # 不用 read_only：云端工具存过的文件 dimension 常是 A1:A1，会静默读 0 行
+    wb = open_workbook(path)
     ws = wb[wb.sheetnames[0]]
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
@@ -760,7 +808,13 @@ def compute_layer2(bugs, cases, min_kw=DEFAULT_L2_MIN_KW, l3_threshold=DEFAULT_L
     # 关键前提：必须有执行数据。2431 条库里「测试结果」全空时，
     # "从未失败过"和"从未跑过"无法区分，此时强行出候选池等于把 80% 的库判死。
     linked_case_ids = {cid for r in rows for cid in r["matched_cases"]}
-    executed = [c for c in cases if c["result"]]
+    # 结果码语义：只有 pass/fail 才算「执行过」。
+    # NP（本阶段应测未测）是「未执行」，把它算进执行率会虚高进度，
+    # 也会让"还没排上"被误解成"跑了没好"。
+    kinds = {c["id"]: classify_result(c.get("result")) for c in cases}
+    executed = [c for c in cases if kinds.get(c["id"]) in ("pass", "fail")]
+    pending = [c for c in cases if kinds.get(c["id"]) == "pending"]
+    blocked = [c for c in cases if kinds.get(c["id"]) == "blocked"]
     executed_rate = round(len(executed) / (len(cases) or 1), 4)
     # 无缺陷数据时同样不出候选池：没有外部事实，"没关联缺陷"等于"没数据"，不是"没价值"
     dead_available = executed_rate >= 0.10 and bool(rows)
@@ -774,7 +828,9 @@ def compute_layer2(bugs, cases, min_kw=DEFAULT_L2_MIN_KW, l3_threshold=DEFAULT_L
             res = c["result"]
             if not res:
                 continue                      # 没跑过不进池（不是"死"，是"没验"）
-            if not re.search(r"通过|pass|Pass|PASS|^ok$", res):
+            # 必须真跑过且真通过。NP/NT/BLOCK 一律不进池：
+            # 把"还没测"当"测了没事"是死用例分析里最典型的假阳性来源。
+            if kinds.get(c["id"]) != "pass":
                 continue
             dead.append({"id": c["id"], "module": c["module"], "title": c["title"],
                          "why": "无缺陷关联，执行全通过"})
@@ -801,6 +857,10 @@ def compute_layer2(bugs, cases, min_kw=DEFAULT_L2_MIN_KW, l3_threshold=DEFAULT_L
         "dead_case_candidates": dead,
         "dead_available": dead_available,
         "executed_rate": executed_rate,
+        "executed": len(executed),
+        "pending_np": len(pending),
+        "blocked": len(blocked),
+        "pending_case_ids": [c["id"] for c in pending],
         "total_cases": len(cases),
         "linked_cases": len(linked_case_ids),
     }
@@ -950,8 +1010,25 @@ def render_markdown(res, bugs_path, cases_path, layer, with_suspected=False):
                   f"{k[3] if len(k) > 3 else ''} |")
             a("")
         dead = l2["dead_case_candidates"]
+
+        # 阶段内待执行（NP）：本阶段应测未测 —— 是进度缺口，既不是失败也不是漏测
+        n_pending = l2.get("pending_np", 0)
+        if n_pending:
+            a(f"### 4.3 阶段内待执行（NP）：**{n_pending} 条**")
+            a("")
+            a("> `NP` = 当前阶段需要测试、但尚未执行。它**不是失败，也不是漏测**，"
+              "而是**进度缺口**——这批复测完成前，相关需求的结论不能算已验证。"
+              "统计口径上它不计入「已执行率」，也不进缺陷逃逸清单。")
+            a("")
+            if l2.get("blocked"):
+                a(f"> 另有 `BLOCK` 阻塞 {l2['blocked']} 条，原因多为环境/依赖，需单独跟进。")
+                a("")
+            ids = l2.get("pending_case_ids", [])
+            a("用例清单：" + "、".join(ids[:30]) + ("…" if len(ids) > 30 else ""))
+            a("")
+
         if not l2.get("dead_available", True):
-            a("### 4.3 死用例候选：**本次不生成**（缺执行数据）")
+            a("### 4.4 死用例候选：**本次不生成**（缺执行数据）")
             a("")
             a(f"> 用例库「测试结果」列填充率仅 {_pct(l2.get('executed_rate'))}，"
               "无法区分「从未失败」和「从未跑过」。这种情况下列候选池会把整库判死，"
@@ -961,7 +1038,7 @@ def render_markdown(res, bugs_path, cases_path, layer, with_suspected=False):
               "或用 `--protected` 传入变异审计的 killer 名单做交叉保护后再人工判断。")
             a("")
         else:
-            a(f"### 4.3 死用例候选（{len(dead)} 条，只列不删）")
+            a(f"### 4.4 死用例候选（{len(dead)} 条，只列不删）")
             a("")
             a(f"> 判据：未关联任何缺陷 + 有执行记录且全通过 + 非范围性 + 不在变异保护名单。"
               f"（执行数据填充率 {_pct(l2.get('executed_rate'))}）")

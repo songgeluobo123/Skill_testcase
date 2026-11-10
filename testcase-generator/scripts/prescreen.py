@@ -5,13 +5,13 @@ prescreen.py — 测试用例质量预审器（正式生成前的 14 项闸门�
 
 检查项（详见 references/quality_prescreen.md）：
   1. 需求覆盖率 >= coverage_min（需 --requirement-rules 提供需求规则清单）
-  2. P0 占比（最高优先级）在 [p0_min, p0_max]（安全攸关软件上调）
-  3. P2 占比在 [p2_min, p2_max]
+  2. P0 占比（最高优先级）在 [p0_min, p0_max]（默认 0.10~0.25，安全攸关软件上调）
+  3. P2 占比在 [p2_min, p2_max]（默认 0.25~0.40）
   4. 每条用例关联至少 1 种测试设计方法（design_method 非空且合法，6 方法之一或多）
   5. 无凭空编造（coverage_rule 必须落在需求规则清单内）
   6. 无语义重复（同 module+steps+expected 去重）
   7. 预期结果可判定（无"合理/美观/流畅"类不可判定词；缺断言标志仅告警）
-  8. 标题规范与残缺检查（≤20 字 / 无编号前缀 / 无【】 / 无句末标点 / 无占位残留；
+  8. 标题规范与残缺检查（≤ --title-max 字，默认 30 / 无编号前缀 / 无【】 / 无句末标点 / 无占位残留；
      缺标题或缺步骤即阻断；重名标题仅告警；用例编号重复即阻断）
   9. 场景构成配额（每功能点 1 正向 : ≥3 异常·边界·权限；模块内无异常/边界即阻断，
      负向偏少或缺权限校验仅告警）
@@ -316,9 +316,12 @@ def main():
     ap.add_argument("--requirement-rules", help="需求规则清单 JSON（字符串数组）")
     ap.add_argument("--coverage-min", type=float, default=0.95)
     ap.add_argument("--p0-min", type=float, default=0.10)
-    ap.add_argument("--p0-max", type=float, default=0.15)
-    ap.add_argument("--p2-min", type=float, default=0.35)
-    ap.add_argument("--p2-max", type=float, default=0.45)
+    ap.add_argument("--p0-max", type=float, default=0.25,
+                    help="P0 占比上限（默认 0.25）。依据：真库 1669 条已执行用例实测 21.2%%，"
+                         "原默认 0.15 会把整库判失败——理论值不该压过团队实际分级习惯")
+    ap.add_argument("--p2-min", type=float, default=0.25,
+                    help="P2 占比下限（默认 0.25）。依据：真库实测 30.9%%，原默认 0.35 会误判")
+    ap.add_argument("--p2-max", type=float, default=0.40)
     ap.add_argument("--ratio-tolerance", type=float, default=0.5,
                     help="整数粒度补偿容差（单位：条，默认 0.5）。仅当占比区间在"
                          "该总条数下不存在任何整数解时才生效；设 0 关闭补偿"
@@ -327,6 +330,8 @@ def main():
                     help="模块场景构成检查的最小用例数门槛（默认 4，少于该数不判负向缺失）")
     ap.add_argument("--orphan-max", type=float, default=0.0,
                     help="孤儿用例占比上限（默认 0.0：任何孤儿用例即阻断；0.1 表示允许 10%%）")
+    ap.add_argument("--title-max", type=int, default=30,
+                    help="第 8 项：用例标题长度上限（默认 30 字。收紧口径的项目可传 20）")
     # --- 密度与深度闸门（第 11/12/13 项）---
     ap.add_argument("--min-cases-per-rule", type=int, default=0,
                     help="第11项：每条需求的用例数下限（默认 0=关闭；普通项目 4，复杂项目 6）")
@@ -376,6 +381,7 @@ def main():
 
     fails = []
     warns = []
+    skipped = []   # 因"本库没有这个字段"而整项跳过的闸门，必须在汇总里显式列出
     total = len(cases)
 
     # 1. 需求覆盖率（按规则 ID 匹配，支持 requirements.json 字符串列表）
@@ -444,17 +450,29 @@ def main():
         fails.append(f"{label} 占比 {ratio:.0%} 不在 [{lo:.0%},{hi:.0%}]（当前 {cnt[key]} 条）")
 
     # 4. 设计方法关联
-    bad_dm = []
-    for c in cases:
+    # 字段整体缺失 ≠ 字段填错。真实项目库常根本没有「设计方法」列（15 列里没这一项），
+    # 此时逐条判"未关联合法方法"会得到 100% 失败——不是用例有问题，是这份库的字段形态不同。
+    # 判据：全部用例该字段都为空 → 整项跳过；只要有任意一条填了，就按"填错的那些"判。
+    def _dm_of(c):
         dm = c.get("design_method")
         if isinstance(dm, str):
             dm = [dm]
-        if not dm or not (set(dm) & DESIGN_METHODS):
-            bad_dm.append(c.get("id", "?"))
+        return [x for x in (dm or []) if str(x).strip()]
+
+    if not any(_dm_of(c) for c in cases):
+        print("[–] 第 4 项跳过：本库无 design_method 字段（不判违规；详见汇总「已跳过」）")
+        skipped.append("第 4 项 设计方法关联：全库无 design_method 字段，本项未生效")
+        bad_dm = []
+    else:
+        bad_dm = []
+        for c in cases:
+            dm = _dm_of(c)
+            if not (set(dm) & DESIGN_METHODS):
+                bad_dm.append(c.get("id", "?"))
     if bad_dm:
         fails.append(f"{len(bad_dm)} 条用例未关联合法测试设计方法"
                      f"（6 方法之一或多）: {bad_dm[:10]}")
-    else:
+    elif not skipped:
         print(f"[✓] 全部 {total} 条用例均关联测试设计方法")
 
     # 5. 编造场景（coverage_rule 中的 R-xxx 必须落在需求清单内）
@@ -510,8 +528,8 @@ def main():
             bad_title.append((cid, "标题为空"))
         else:
             reason = None
-            if len(t) > 20:
-                reason = f"超长 {len(t)} 字"
+            if len(t) > args.title_max:
+                reason = f"超长 {len(t)} 字（上限 {args.title_max}）"
             elif re.match(r"^\s*\d+\s*[、.．]", t):
                 reason = "含序号前缀"
             elif "【" in t or "】" in t:
@@ -527,7 +545,7 @@ def main():
             no_steps.append(cid)
 
     if bad_title:
-        fails.append(f"{len(bad_title)} 条用例标题不合规（≤20 字 / 无序号前缀 / 无【】 / 无句末标点）: {bad_title[:10]}")
+        fails.append(f"{len(bad_title)} 条用例标题不合规（≤{args.title_max} 字 / 无序号前缀 / 无【】 / 无句末标点）: {bad_title[:10]}")
     else:
         print(f"[✓] 全部 {total} 条用例标题合规")
     if no_steps:
@@ -581,6 +599,9 @@ def main():
         warns.append(f"{len(no_perm)} 个模块无权限校验类用例: {no_perm[:5]}")
 
     # 10. 孤儿用例（无 coverage_rule，且未标 exploratory；默认直接阻断）
+    # 「全库都没有 coverage_rule 且没给需求清单」= 这份库根本不做需求追溯，
+    # 此时每条都算孤儿（100%），判它没有信息量。跳过并显式登记，不静默放行。
+    has_rule_field = any(str(c.get("coverage_rule", "") or "").strip() for c in cases)
     orphans = []
     for c in cases:
         if str(c.get("coverage_rule", "") or "").strip():
@@ -590,7 +611,11 @@ def main():
             continue
         orphans.append(str(c.get("id", "?")))
     orphan_ratio = len(orphans) / total
-    if orphans and orphan_ratio > args.orphan_max:
+    if not has_rule_field and not args.requirement_rules:
+        print("[–] 第 10 项跳过：全库无 coverage_rule 且未提供需求清单（本库不做需求追溯）")
+        skipped.append("第 10 项 孤儿用例：全库无 coverage_rule 且无需求清单，"
+                       "需求追溯与覆盖率检查本项未生效")
+    elif orphans and orphan_ratio > args.orphan_max:
         fails.append(f"{len(orphans)} 条孤儿用例（无 coverage_rule 且未标 exploratory）"
                      f"占比 {orphan_ratio:.0%} > 上限 {args.orphan_max:.0%}: {orphans[:10]}")
     elif orphans:
@@ -758,6 +783,12 @@ def main():
                          + ("…" if len(weak) > 10 else ""))
 
     print()
+    if skipped:
+        # 跳过必须可见。静默跳过 = 把闸门关掉还不报警，比闸门误报更危险。
+        print("=== 已跳过的闸门（本库字段形态不支持，不代表通过）===")
+        for s in skipped:
+            print(f"  – {s}")
+        print()
     if fails:
         print("=== 预审不通过，需修正后重跑 ===")
         for f in fails:

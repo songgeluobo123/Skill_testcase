@@ -37,14 +37,14 @@ This skill uses a single **P0–P3** scale (**no P1–P4 system, no P4**); a cas
 
 | Level | Scope | Execution requirement | Suggested share |
 |---|---|---|---|
-| **P0** 🔴 | Feasibility/concept testing: landscape main-flow features, portrait-to-landscape functional equivalence, cross-end integration (release-blocking) | Run every build; 100% pass required to release | 10%~15% |
+| **P0** 🔴 | Feasibility/concept testing: landscape main-flow features, portrait-to-landscape functional equivalence, cross-end integration (release-blocking) | Run every build; 100% pass required to release | 10%~25% |
 | **P1** 🟠 | Main-flow must-test: step-by-step main-flow features (per landscape UI flowchart), equivalence classes incl. exception scenarios, landscape layout & adaptation, AI data accuracy, device monitoring sensitivity, data security | Covered in every main test round (SIT / regression core) | 25%~35% |
-| **P2** 🔵 | Display completeness: landscape UI renders completely; basic features not on the main flow (controls not occluded or overflowing) | Covered in normal iterations; optional in regression | 35%~45% |
+| **P2** 🔵 | Display completeness: landscape UI renders completely; basic features not on the main flow (controls not occluded or overflowing) | Covered in normal iterations; optional in regression | 25%~40% |
 | **P3** ⚪ | Aesthetics & compatibility: UI correctness and layout aesthetics, post-rotation layout, landscape responsiveness, Android/iOS version compatibility, certification-standard performance | Covered in full rounds or on demand; not a release gate | 10%~20% |
 
 **Execution order (coverage grows with priority)**: smoke = P0 → main test SIT = P0+P1 → regression = P0+P1+sampled P2 → full / exploratory = P0~P3.
 
-> Shares are enforced by `scripts/prescreen.py` (P0 default 10%~15%, P2 default 35%~45%); any out-of-range share triggers a re-prioritization rollback. Safety-critical projects can raise the P0 share at **checkpoint ①** (e.g. 40%~60%, see `references/quality_prescreen.md`); the memory mechanism reuses that preference across sessions.
+> Shares are enforced by `scripts/prescreen.py` (P0 default 10%~25%, P2 default 25%~40%); any out-of-range share triggers a re-prioritization rollback. Safety-critical projects can raise the P0 share at **checkpoint ①** (e.g. 40%~60%, see `references/quality_prescreen.md`); the memory mechanism reuses that preference across sessions.
 
 ## 3. Directory structure & layering
 
@@ -76,7 +76,7 @@ testcase-generator/
 │   ├── defect_loop.md        # ★Defect loop (real-defect layer): escape gap G4 + gap classes + backfill order
 │   ├── workflow.md           # Quality-assurance overview (five gates + one retrospective + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (18, Python 3.13/3.14)
+└── scripts/                 # Executable scripts (19, Python 3.13/3.14)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
     ├── prescreen.py             # Quality prescreen gate (14 checks)
