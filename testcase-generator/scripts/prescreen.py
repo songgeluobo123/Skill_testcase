@@ -9,7 +9,7 @@ prescreen.py — 测试用例质量预审器（正式生成前的 14 项闸门�
   3. P2 占比在 [p2_min, p2_max]（默认 0.25~0.40）
   4. 每条用例关联至少 1 种测试设计方法（design_method 非空且合法，6 方法之一或多）
   5. 无凭空编造（coverage_rule 必须落在需求规则清单内）
-  6. 无语义重复（同 module+steps+expected 去重）
+  6. 无语义重复（同 module+precondition+steps+expected 去重；前置不同即视为不同用例）
   7. 预期结果可判定（无"合理/美观/流畅"类不可判定词；缺断言标志仅告警）
   8. 标题规范与残缺检查（≤ --title-max 字，默认 30 / 无编号前缀 / 无【】 / 无句末标点 / 无占位残留；
      缺标题或缺步骤即阻断；重名标题仅告警；用例编号重复即阻断）
@@ -524,9 +524,17 @@ def main():
             print(f"[✓] 无编造场景")
 
     # 6. 语义重复
+    #    指纹必须含 precondition：前置不同 = 不同用例。
+    #    实测坑：某真实库报的 1 组「重复」是
+    #      TC-首页-006 前置=已进入**本周训练**界面
+    #      TC-首页-010 前置=已进入**四周训练**界面
+    #    步骤与预期确实相同，但那是两个入口——而 case_design.md 第七节自己就要求
+    #    「多入口一律拆条」。漏掉前置，就会逼着人把刚按要求拆开的用例再删回去。
+    #    本项是 fails（阻断），误报的代价比 warn 大得多。
     seen = {}
     for c in cases:
-        key = (c.get("module", ""), norm(c.get("steps", "")), norm(c.get("expected", "")))
+        key = (c.get("module", ""), norm(c.get("precondition", "")),
+               norm(c.get("steps", "")), norm(c.get("expected", "")))
         seen.setdefault(key, []).append(c.get("id", "?"))
     dups = [v for v in seen.values() if len(v) > 1]
     if dups:
