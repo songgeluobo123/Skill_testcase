@@ -149,6 +149,65 @@ check("模块名归集 报出「用例归集不到」", "归集不到" in out or
       out[-800:])
 check("模块名归集 真零覆盖仍然报「零覆盖」", "零覆盖" in out, out[-800:])
 
+# ---------- 四、12b 矩阵回指 ----------
+# 实测场景：跳过 Step 3.5 直接写用例，边界测试里只有 35% 含真实边界断言，而预审全绿——
+# 因为原第 12 项只看用例自身证据，不看"到底有没有矩阵"。
+def bcase(cid, rule="R-001"):
+    c = mk(cid, rule)
+    c["design_method"] = ["边界值分析"]
+    return c
+
+
+b3 = [bcase("TC-M-001"), bcase("TC-M-002"), bcase("TC-M-003")]
+
+# 1) 声称边界值分析但没给矩阵 → 必须点出来
+r = run(b3, "mtx_missing", rules=["R-001"])
+check("矩阵回指 未提供矩阵时报「没有提供矩阵」",
+      "矩阵回指" in r.stdout and "没有提供矩阵" in r.stdout, r.stdout[-500:])
+
+# 2) --matrix-mode off 关闭
+r = run(b3, "mtx_off", rules=["R-001"], extra=["--matrix-mode", "off"])
+check("矩阵回指 --matrix-mode off 关闭", "[!] 矩阵回指" not in r.stdout, r.stdout[-400:])
+
+# 3) 提供矩阵且全覆盖 → 通过
+MTX = os.path.join(TMP, "matrix.md")
+open(MTX, "w", encoding="utf-8").write("""
+| # | 字段 | 类型 | 取值域 | 类/边界点 | 类别 | 预期要点 | 覆盖 R-ID | 用例 ID |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 年龄 | 数值 | 0-150 | 0 | 边界 | 应通过 | R-001 | TC-M-001 |
+| 2 | 年龄 | 数值 | 0-150 | 150 | 边界 | 应通过 | R-001 | TC-M-002 |
+| 3 | 年龄 | 数值 | 0-150 | 151 | 边界 | 应拒绝 | R-001 | TC-M-003 |
+""")
+r = run(b3, "mtx_ok", rules=["R-001"], extra=["--matrix", MTX])
+check("矩阵回指 全覆盖时给出达标提示",
+      "矩阵回指覆盖 100%" in r.stdout, r.stdout[-500:])
+check("矩阵回指 全覆盖时不报问题", "[!] 矩阵回指" not in r.stdout, r.stdout[-500:])
+
+# 4) 矩阵只引用 1 条 → 覆盖率 33% < 60% → 报
+MTX2 = os.path.join(TMP, "matrix_thin.md")
+open(MTX2, "w", encoding="utf-8").write("""
+| # | 字段 | 类型 | 取值域 | 类/边界点 | 类别 | 预期要点 | 覆盖 R-ID | 用例 ID |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 年龄 | 数值 | 0-150 | 0 | 边界 | 应通过 | R-001 | TC-M-001 |
+| 2 | 年龄 | 数值 | 0-150 | 150 | 边界 | 应通过 | R-001 |  |
+| 3 | 年龄 | 数值 | 0-150 | 151 | 边界 | 应拒绝 | R-001 |  |
+""")
+r = run(b3, "mtx_thin", rules=["R-001"], extra=["--matrix", MTX2])
+check("矩阵回指 覆盖率不足时报出比例",
+      "矩阵回指覆盖率" in r.stdout and "33%" in r.stdout, r.stdout[-500:])
+check("矩阵回指 覆盖率不足时 warn 不阻断", r.returncode != 1 or "矩阵回指" in r.stdout,
+      f"exit={r.returncode}")
+
+r = run(b3, "mtx_thin_blk", rules=["R-001"],
+        extra=["--matrix", MTX2, "--matrix-mode", "block"])
+check("矩阵回指 block 模式阻断", r.returncode == 1, f"exit={r.returncode}")
+
+# 5) 不声称边界值/等价类 → 不检查（避免无关库被打扰）
+plain = [mk("TC-N-001", "R-001"), mk("TC-N-002", "R-001")]
+r = run(plain, "mtx_na", rules=["R-001"])
+check("矩阵回指 无用例声称边界值/等价类时不报",
+      "矩阵回指" not in r.stdout, r.stdout[-400:])
+
 print("\n" + "=" * 30)
 print(f"通过 {PASS}/{PASS + FAIL}")
 if FAILS:

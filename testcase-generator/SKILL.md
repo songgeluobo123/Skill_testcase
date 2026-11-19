@@ -134,8 +134,11 @@ agent_created: true
   ```bash
   # Step 5 标准命令模板 —— 四个深度闸门一律显式 block，不要依赖默认值。
   # 默认值是 warn / off，只靠默认值跑出来的"全绿"是假绿：最有力的四项全都不拦人。
+  # --matrix 指向 Step 3.5 的矩阵产物（test_output/{版本+需求名}/testpoint/等价类边界值矩阵.md）：
+  #   缺它时，凡有用例声称「边界值/等价类」分析都会被点出——这是防止跳过 Step 3.5 还全绿的闸门。
   python scripts/prescreen.py test_cases.json \
          --requirement-rules ./out/requirement_rules.json \
+         --matrix ./out/testpoint/等价类边界值矩阵.md \
          --min-cases-per-rule 6 \
          --density-mode block --method-check block \
          --scene-rule-mode block --range-mode block \

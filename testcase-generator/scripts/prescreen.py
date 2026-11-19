@@ -64,6 +64,7 @@ prescreen.py — 测试用例质量预审器（正式生成前的 14 项闸门�
 
 import argparse
 import json
+import os
 import re
 import sys
 
@@ -411,6 +412,15 @@ def main():
                          "老库若用 REG-xxx 编号，不设此项会被误判为孤儿用例")
     ap.add_argument("--method-check", choices=["off", "warn", "block"], default="warn",
                     help="第12项设计方法一致性校验强度（默认 warn）")
+    ap.add_argument("--matrix", default="",
+                    help="等价类/边界矩阵 Markdown 路径（Step 3.5 产出）。"
+                         "提供后用「矩阵回指覆盖率」校验：声称边界值/等价类的用例，"
+                         "有多少能在矩阵里找到出处")
+    ap.add_argument("--matrix-min-cover", type=float, default=0.6,
+                    help="第12b项矩阵回指覆盖率下限（默认 0.6）。低于该比例说明矩阵与用例脱节")
+    ap.add_argument("--matrix-mode", choices=["off", "warn", "block"], default="warn",
+                    help="第12b项矩阵回指校验强度（默认 warn）。"
+                         "不传 --matrix 但有用例声称边界值/等价类时，本项报「无矩阵支撑」")
     ap.add_argument("--scene-rule-mode", choices=["off", "warn", "block"], default="warn",
                     help="第13项需求级场景配额强度（默认 warn）")
     ap.add_argument("--min-neg-per-rule", type=int, default=3,
@@ -844,6 +854,60 @@ def main():
                          f"（属欠展开，非虚标；建议按等价类矩阵补齐取值集合）: "
                          + "、".join(cid for cid, _ in thin[:10])
                          + ("…" if len(thin) > 10 else ""))
+
+    # 12b. 矩阵回指（M2b）：声称边界值/等价类的用例，能不能在矩阵里找到出处
+    #
+    # 实测：某项目跳过了 Step 3.5 直接写用例，边界测试 17 条里只有 6 条含真实边界断言
+    # （35%）、172 条里预期含真实数值的只有 61 条 —— 而预审**全绿**。
+    # 因为第 12 项只看用例自身证据（步骤里有没有比较词），不看"到底有没有矩阵"。
+    # 矩阵不是文档装饰，它是密度闸门唯一的燃料：没有矩阵，6 条只是同一件事换说法。
+    if args.matrix_mode != "off":
+        MATRIX_METHODS = ("边界值分析", "等价类划分")
+        claimed = [c for c in cases
+                   if any(m in str(c.get("design_method", "") or "") for m in MATRIX_METHODS)]
+        if claimed:
+            ids = [str(c.get("id", "")).strip() for c in claimed]
+            problem = None
+            detail = ""
+            if not args.matrix:
+                problem = (f"{len(claimed)} 条用例声称「边界值/等价类」分析，但**没有提供矩阵**"
+                           f"（--matrix）。Step 3.5 很可能被跳过——没有矩阵，边界点只能凭经验拍，"
+                           f"补出来的用例是同一件事换说法")
+            else:
+                mapping = None
+                try:
+                    _dir = os.path.dirname(os.path.abspath(__file__))
+                    if _dir not in sys.path:
+                        sys.path.insert(0, _dir)
+                    import matrix_lint as ml
+                    mapping, rows_m, _used = ml.load_matrix(args.matrix)
+                except Exception as e:
+                    problem = f"矩阵文件读取失败（{e}），矩阵回指未校验"
+                if mapping is None and problem is None:
+                    problem = (f"矩阵 {args.matrix} 里没有可识别的矩阵表"
+                               f"（需含「字段 / 类·边界点 / 类别」列），矩阵回指未校验")
+                if problem is None:
+                    cited = set()
+                    for row in rows_m:
+                        for tok in re.split(r"[;；,，\s]+", ml.cell(row, mapping, "case")):
+                            if tok:
+                                cited.add(tok)
+                    hit = sum(1 for i in ids if i in cited)
+                    ratio = hit / len(ids) if ids else 0.0
+                    if ratio < args.matrix_min_cover:
+                        problem = (f"矩阵回指覆盖率 {ratio:.0%}（{hit}/{len(ids)}）"
+                                   f"< 下限 {args.matrix_min_cover:.0%}："
+                                   f"声称边界值/等价类的用例有一半以上在矩阵里找不到出处，"
+                                   f"说明矩阵与用例脱节（或建了没被消费）")
+                    else:
+                        print(f"[✓] 矩阵回指覆盖 {ratio:.0%}（{hit}/{len(ids)} 条声称边界值/等价类的用例"
+                              f"在矩阵中有出处）")
+            if problem:
+                if args.matrix_mode == "block":
+                    fails.append(problem)
+                else:
+                    warns.append(problem)
+                print(f"[!] 矩阵回指：{problem}")
 
     # 13. 需求级场景配额（M6）：第 9 项的下钻，防"大模块掩盖小需求"
     if args.scene_rule_mode != "off":
