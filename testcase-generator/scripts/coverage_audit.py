@@ -291,6 +291,19 @@ def audit(cases, rules, top=3, threshold=0.08, module_min=DEFAULT_MODULE_MIN):
             if perm:
                 d["perm"] += 1
 
+    # 2b) 模块名不匹配识别
+    #
+    # 实测坑：需求表分类写「APP 系统设置」，用例侧模块叫「App 设置与个人中心」。
+    # 规则本身**被覆盖了**（coverage_rule 显式回指，与模块名无关），但用例侧场景构成
+    # 是按模块名归集的，名字对不上就归不进来 → 该模块 neg/pos/perm 全 0
+    # → 报告打成「无异常/边界用例」，让人去补一堆早就有的用例。
+    #
+    # 判据必须锚**数据**而不是名字像不像：
+    #   规则已被覆盖（covered > 0）却没归集到任何用例（cases_seen 为空）→ 名称对不上
+    # 若规则本身 0 覆盖，那是真漏测，照旧报「零覆盖」。
+    def _name_mismatch(d, covered):
+        return covered > 0 and not d["cases_seen"]
+
     rows = []
     for m in sorted(mods):
         d = mods[m]
@@ -299,10 +312,12 @@ def audit(cases, rules, top=3, threshold=0.08, module_min=DEFAULT_MODULE_MIN):
         ratio = covered / total if total else 0.0
         missing = [rid for rid in d["rules"] if hit_count[rid] == 0]
         weak_only = [rid for rid in missing if weak_cases[rid]]
+        mismatch = _name_mismatch(d, covered)
         status = "❌ 零覆盖" if covered == 0 else ("⚠️ 低于阈值" if ratio < module_min else "✅ 达标")
         rows.append({
             "module": m, "rules_total": total, "rules_covered": covered,
             "coverage": ratio, "status": status,
+            "name_mismatch": mismatch,
             "case_count": len(d["case_ids"]) or len(d["cases_seen"]),
             "pos": d["pos"], "neg": d["neg"], "perm": d["perm"],
             "missing": missing, "weak_only": weak_only,
@@ -321,6 +336,7 @@ def audit(cases, rules, top=3, threshold=0.08, module_min=DEFAULT_MODULE_MIN):
         "covered_rules": covered_rules,
         "overall": covered_rules / total_rules if total_rules else 0.0,
         "modules": rows,
+        "name_mismatch": [r["module"] for r in rows if r.get("name_mismatch")],
         "rule_by_id": rule_by_id,
         "hit_cases": hit_cases,
         "weak_cases": weak_cases,
@@ -534,6 +550,16 @@ def render_markdown(res, cases_path, rules_path):
         a(f"| {r['module']} | {r['rules_total']} | {r['rules_covered']} | "
           f"{r['coverage']:.1%} | {r['case_count']} | {r['status']} |")
     a("")
+
+    if res.get("name_mismatch"):
+        a(f"> ⚠️ **{len(res['name_mismatch'])} 个需求侧模块的用例归集不到**："
+          f"{'、'.join(res['name_mismatch'])}")
+        a("> 这些模块的规则**已被覆盖**（覆盖率不为 0），但用例侧没有同名模块，"
+          "导致「正向 / 负向 / 权限」构成统计为 0。")
+        a("> 这只说明两边**模块命名不一致**，**不代表缺用例**——"
+          "别按「无异常/边界用例」去补，会补一批早就存在的。")
+        a("> 处理：把需求表分类统一到用例侧模块名，或在映射表里固定对应关系。")
+        a("")
 
     low = [r for r in res["modules"] if r["coverage"] < res["module_min"]]
     a("## 二、低覆盖模块（重点补充对象）")

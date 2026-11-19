@@ -22,6 +22,12 @@ prescreen.py — 测试用例质量预审器（正式生成前的 14 项闸门�
 
   11. 需求密度（M1）：每条需求用例数 >= --min-cases-per-rule（默认 0=关闭，建议 6）。
       按 coverage_rule **显式回指**计数，不做文本猜测；--density-exempt 可豁免简单需求
+  11b. 单例规则（M1b）：只有 1 条用例的需求规则**独立报出**（默认 warn），
+      不依赖 --min-cases-per-rule。实测某项目 87 条需求里 38 条只有 1 条用例，
+      其中 27 条是有状态机/枚举的实质功能——不是"需求简单"，是没往下拆功能点。
+      确属"验证不做"的走 --density-exempt 显式豁免，不能靠关阈值绕过。
+  11c. 回归用例分离：--regression-rules / --regression-prefix 指定的规则**不进密度分母**，
+      单独按"回归厚度"统计。实测某库 553 条里 381 条是存量回归，混算会把覆盖量虚胖 3 倍。
   12. 方法一致性（M2）：design_method 声称的方法必须有落地证据，否则判**方法虚标**。
       边界值分析→须含比较/极值词或 0·100 边界字面量 且含数字；
       等价类划分→test_data 须≥2 取值或含类归属词（仅 1 取值记"欠展开"，不算虚标）；
@@ -392,6 +398,17 @@ def main():
                     help="第11项执行强度（默认 warn；--min-cases-per-rule 为 0 时本项不生效）")
     ap.add_argument("--density-exempt", default="",
                     help="第11项豁免的需求 ID，逗号分隔，如 R-002,R-039（单字段型/待澄清需求）")
+    ap.add_argument("--single-case-mode", choices=["off", "warn", "block"], default="warn",
+                    help="第11b项单例规则校验（默认 warn）：只有 1 条用例的需求规则，"
+                         "几乎必然是「没往下拆功能点」而不是「需求简单」。"
+                         "确属「验证不做」的用 --density-exempt 豁免，不能靠关闸门绕过")
+    ap.add_argument("--regression-rules", default="",
+                    help="回归规则的 ID 列表，逗号分隔（如 R-088,R-089）。"
+                         "回归用例不计入需求密度、单独按「回归厚度」统计——"
+                         "回归条数多会伪造覆盖量，是最常见的口径混淆")
+    ap.add_argument("--regression-prefix", default="",
+                    help="回归规则的 ID 前缀（如 REG-），与 --regression-rules 并用；"
+                         "老库若用 REG-xxx 编号，不设此项会被误判为孤儿用例")
     ap.add_argument("--method-check", choices=["off", "warn", "block"], default="warn",
                     help="第12项设计方法一致性校验强度（默认 warn）")
     ap.add_argument("--scene-rule-mode", choices=["off", "warn", "block"], default="warn",
@@ -685,17 +702,42 @@ def main():
     else:
         print(f"[✓] 无孤儿用例（每条用例均有需求映射）")
 
-    # 需求 → 用例 的显式回指索引（第 11/13 项共用；只认 coverage_rule 里写明的 R-ID）
-    linked = {}
+    # 需求 → 用例 的显式回指索引（第 11/13 项共用；只认 coverage_rule 里写明的规则 ID）
+    #
+    # **回归用例必须与需求用例分开计数**（第 11c 项及密度分母）。
+    # 实测教训：某真实库 553 条里 381 条是存量回归，挂在 10 条回归规则上；
+    # 若不分家，"553 条"会被当成覆盖量汇报，而真正覆盖 87 条需求的只有 172 条，
+    # 密度 1.98 条/规则——虚胖 3 倍多。回归厚度是资产，不是覆盖。
+    reg_rules = {x.strip() for x in str(getattr(args, "regression_rules", "")).split(",") if x.strip()}
+    reg_prefix = str(getattr(args, "regression_prefix", "") or "").strip()
+
+    def _is_reg_rule(rid):
+        return rid in reg_rules or (bool(reg_prefix) and rid.startswith(reg_prefix))
+
+    linked, reg_linked = {}, {}
     for c in cases:
         for tok in str(c.get("coverage_rule", "") or "").split(";"):
             tok = tok.strip()
-            if re.fullmatch(r"R-\d+", tok):
-                linked.setdefault(tok, []).append(c)
+            if not tok:
+                continue
+            ok = bool(re.fullmatch(r"R-\d+", tok)) or (
+                bool(reg_prefix) and tok.startswith(reg_prefix))
+            if not ok:
+                continue
+            target = reg_linked if _is_reg_rule(tok) else linked
+            target.setdefault(tok, []).append(c)
+
+    if reg_rules or reg_prefix:
+        n_reg_cases = sum(len(v) for v in reg_linked.values())
+        print(f"[i] 回归用例 {n_reg_cases} 条，挂在 {len(reg_linked)} 条回归规则上；"
+              f"不计入需求密度（覆盖量只算需求规则）")
 
     # 11. 需求密度（M1）：逐需求计数，打破"模块合计达标即放行"的平台化分布
+    #     回归规则不进分母：它们不是需求，回归厚度不能当覆盖量
+    scope = sorted(rule_ids) if rule_ids else sorted(linked)
+    scope = [r for r in scope if not _is_reg_rule(r)]
+
     if args.density_mode != "off" and args.min_cases_per_rule > 0:
-        scope = sorted(rule_ids) if rule_ids else sorted(linked)
         gaps = []
         for rid in scope:
             if rid in exempt_rules:
@@ -724,6 +766,33 @@ def main():
                 print(f"      … 其余 {len(gaps) - 15} 个需求见汇总消息")
         else:
             print(f"[✓] 需求密度达标（{len(scope)} 个需求均 ≥{args.min_cases_per_rule} 条）")
+
+    # 11b. 单例规则（M1b）：只有 1 条用例的需求规则
+    #
+    # 为什么不直接用「密度 ≥6」一刀切：简单需求（枚举单值/纯展示）1 条是合理的，
+    # 该走 --density-exempt 显式声明；而**没声明的 1 条**几乎必然是"需求规则直连用例、
+    # 没往下拆功能点"——实测某项目 87 条需求里 38 条只有 1 条用例，其中 27 条是
+    # 有状态机/枚举的实质功能（连接三态、重连条件、恢复默认五档），本该 4~6 条。
+    # 本项独立于 --min-cases-per-rule：密度阈值关掉也照跑。
+    if args.single_case_mode != "off" and scope:
+        singles = [r for r in scope
+                   if r not in exempt_rules and len(linked.get(r, [])) == 1]
+        if singles:
+            msg = (f"{len(singles)} 条需求规则**只有 1 条用例**（多半是没往下拆功能点，"
+                   f"不是需求简单）: " + "、".join(singles[:10])
+                   + ("…" if len(singles) > 10 else "")
+                   + "。确属「验证不做」请用 --density-exempt 显式豁免")
+            if args.single_case_mode == "block":
+                fails.append(msg)
+            else:
+                warns.append(msg)
+            print(f"[!] 单例规则：{len(singles)}/{len(scope)} 条需求只有 1 条用例")
+            for r in singles[:15]:
+                print(f"      {r:8s} 1 条  {rule_meta.get(r, '')}")
+            if len(singles) > 15:
+                print(f"      … 其余 {len(singles) - 15} 条见汇总消息")
+        else:
+            print(f"[✓] 无单例规则（每条需求至少 2 条用例或有豁免说明）")
 
     # 12. 方法一致性（M2）：声称的方法必须有落地证据，否则判"方法虚标"
     if args.method_check != "off":
