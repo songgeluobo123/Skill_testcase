@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-to_excel.py — 将结构化测试用例 JSON 转换为 Excel（Step 6 主产物，替代 test-case-export）
+"""测试用例 JSON → Excel 导出。
 
-10 列（默认）：用例编号 | 测试模块 | 用例名称 | 优先级 | 测试类型 | 前置条件 | 测试步骤 | 预期结果 | 适用阶段 | 设计方法
-11 列（--with-environment，"双前置列"实证模式）：在「前置条件」前插入「测试环境」列
-11 列（--with-remark，"场景展开"模式）：在末尾追加「备注」列（用于范围性用例逐项展开子场景操作）
+v1.11.5 起默认输出 **15 列（优秀库对齐表头）**：
+
+15 列（默认）：用例编号 | 顶级功能模块 | 功能模块 | 设备型号 | 测试用例标题 | 测试优先级 |
+              测试类型 | APP版本类型 | 测试环境 | 前置条件 | 测试步骤 | 预期结果 |
+              实际结果 | 测试数据 | 备注
+
+- 「测试环境」与「备注」内置在 15 列中（双前置列 / 场景展开不再需要开关）；
+- 「实际结果」留给执行阶段回填，生成时恒为空；
+- 「顶级功能模块 / 设备型号 / APP版本类型」读 JSON 的 `top_module / device / app_version`
+  字段，无则分别留空 / 缺省「公共」/ 留空；
+- `--legacy` 回到旧 10 列（兼容既有项目约定），旧变体 `--with-environment / --with-remark`
+  仅在 legacy 模式下生效；`--with-defect` 两模式通用（追加「关联缺陷」列）；
+- `--with-rtm` 与表头无关，照旧在第二个 sheet 追加需求追溯矩阵。
+
 （列定义见 references/output_format.md；双前置列实证依据见 references/excellent_case_patterns.md 做法 1）
 
 用法：
-  python to_excel.py test_cases.json -o "test_output/v1.11 功能测试用例.xlsx"
-  python to_excel.py test_cases.json -o out.xlsx --with-environment    # 测试环境/前置条件分离
-  python to_excel.py test_cases.json -o out.xlsx --with-remark         # 末尾增加「备注」列
-  python to_excel.py test_cases.json -o out.xlsx --with-environment --with-remark
-  python to_excel.py --emit-template "模板.xlsx"        # 仅生成空白模板（含表头与示例行）
-  python to_excel.py --emit-template "模板.xlsx" --with-environment
+  python to_excel.py test_cases.json -o out.xlsx                    # 默认 15 列
+  python to_excel.py test_cases.json -o out.xlsx --with-defect      # 16 列（+关联缺陷）
+  python to_excel.py test_cases.json -o out.xlsx --legacy           # 旧 10 列
+  python to_excel.py --emit-template 模板.xlsx                       # 空白模板（15 列）
 
-输入 JSON 字段（每条用例）：
-  module, name(可选), priority(P0-P3), precondition, steps, expected,
-  environment(可选, 仅供 --with-environment), test_data(可选), coverage_rule(可选),
-  design_method(可选, 列表或字符串), test_type(可选, 测试类型), stage(可选, 适用阶段),
-  id(可选, 作为用例编号), remark(可选, 仅供 --with-remark)
+输入 JSON 字段：id, module, top_module(可选), device(可选), name(或 title), priority,
+  test_type(可选), app_version(可选), environment(可选), precondition, steps, expected,
+  stage(可选), design_method(可选, 列表或字符串), test_data(可选), remark(可选),
+  actual(可选, 执行后回填), defect(可选)
 
 依赖：openpyxl
 """
@@ -40,14 +47,22 @@ except ImportError:
     Workbook = Font = Alignment = PatternFill = None
     HAS_OPENPYXL = False
 
-COLUMNS = ["用例编号", "测试模块", "用例名称", "优先级", "测试类型", "前置条件", "测试步骤", "预期结果", "适用阶段", "设计方法"]
-COLUMNS_WITH_ENV = COLUMNS[:5] + ["测试环境"] + COLUMNS[5:]
-COLUMN_REMARK = "备注"
+# ---------- v1.11.5：默认 15 列（优秀库对齐表头） ----------
+COLUMNS = ["用例编号", "顶级功能模块", "功能模块", "设备型号", "测试用例标题", "测试优先级",
+           "测试类型", "APP版本类型", "测试环境", "前置条件", "测试步骤", "预期结果",
+           "实际结果", "测试数据", "备注"]
+WIDTHS = [13, 13, 16, 10, 28, 9, 13, 14, 34, 34, 42, 42, 10, 16, 50]
 COLUMN_DEFECT = "关联缺陷"
-WIDTHS = [10, 16, 24, 8, 12, 34, 42, 42, 10, 24]
-WIDTHS_WITH_ENV = WIDTHS[:5] + [36] + WIDTHS[5:]
-WIDTH_REMARK = 60
 WIDTH_DEFECT = 28
+
+# ---------- 旧 10 列（--legacy 兼容既有项目约定） ----------
+LEGACY_COLUMNS = ["用例编号", "测试模块", "用例名称", "优先级", "测试类型", "前置条件",
+                  "测试步骤", "预期结果", "适用阶段", "设计方法"]
+LEGACY_WITH_ENV = LEGACY_COLUMNS[:5] + ["测试环境"] + LEGACY_COLUMNS[5:]
+LEGACY_WIDTHS = [10, 16, 24, 8, 12, 34, 42, 42, 10, 24]
+LEGACY_WIDTHS_ENV = LEGACY_WIDTHS[:5] + [36] + LEGACY_WIDTHS[5:]
+WIDTH_REMARK = 60
+
 PRIORITY_SET = {"P0", "P1", "P2", "P3"}
 
 
@@ -73,6 +88,17 @@ def dm_to_str(dm):
     return " / ".join(dm)
 
 
+def td_to_str(v):
+    """测试数据：dict 逐对换行 `键=值`；数组「；」拼接；其余原样。"""
+    if not v:
+        return ""
+    if isinstance(v, dict):
+        return "\n".join(f"{k}={x}" for k, x in v.items())
+    if isinstance(v, (list, tuple)):
+        return "；".join(str(x) for x in v if str(x).strip())
+    return str(v)
+
+
 def defect_to_str(v):
     """关联缺陷：字符串原样；数组用「；」拼接；空值留空。"""
     if not v:
@@ -84,7 +110,29 @@ def defect_to_str(v):
     return str(v)
 
 
-def case_row(c, seq, with_env=False, with_remark=False, with_defect=False):
+def case_row15(c, seq):
+    """15 列行：顶级功能模块/设备型号/APP版本类型/实际结果为新增位，缺省规则见文件头。"""
+    cid = c.get("id") or f"TC-{seq:03d}"
+    return [
+        cid,
+        c.get("top_module", ""),
+        c.get("module", "未分类"),
+        c.get("device", "公共"),
+        c.get("name") or c.get("title") or "",
+        normalize_priority(c.get("priority")),
+        c.get("test_type") or "功能测试",
+        c.get("app_version", ""),
+        c.get("environment", ""),
+        c.get("precondition", ""),
+        c.get("steps", ""),
+        c.get("expected", ""),
+        c.get("actual", ""),
+        td_to_str(c.get("test_data")),
+        c.get("remark", ""),
+    ]
+
+
+def case_row_legacy(c, seq, with_env=False, with_remark=False, with_defect=False):
     cid = c.get("id") or f"TC-{seq:03d}"
     core = [
         cid,
@@ -109,28 +157,50 @@ def case_row(c, seq, with_env=False, with_remark=False, with_defect=False):
     return row
 
 
-def build_workbook(cases, with_env=False, with_remark=False, with_defect=False):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "功能测试用例"
+def _style_header(ws):
     header_fill = PatternFill("solid", fgColor="305496")
     header_font = Font(bold=True, color="FFFFFF")
     wrap = Alignment(vertical="top", wrap_text=True)
-    cols = ((COLUMNS_WITH_ENV if with_env else COLUMNS)
-            + ([COLUMN_REMARK] if with_remark else [])
-            + ([COLUMN_DEFECT] if with_defect else []))
-    ws.append(cols)
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = wrap
-    for i, c in enumerate(cases, 1):
-        ws.append(case_row(c, i, with_env, with_remark, with_defect))
-    widths = ((WIDTHS_WITH_ENV if with_env else WIDTHS)
-              + ([WIDTH_REMARK] if with_remark else [])
-              + ([WIDTH_DEFECT] if with_defect else []))
+    return wrap
+
+
+def _set_widths(ws, widths):
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = w
+
+
+def build_workbook(cases, legacy=False, with_env=False, with_remark=False,
+                   with_defect=False):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "功能测试用例"
+    if legacy:
+        cols = ((LEGACY_WITH_ENV if with_env else LEGACY_COLUMNS)
+                + ([("备注")] if with_remark else [])
+                + ([COLUMN_DEFECT] if with_defect else []))
+        widths = ((LEGACY_WIDTHS_ENV if with_env else LEGACY_WIDTHS)
+                  + ([WIDTH_REMARK] if with_remark else [])
+                  + ([WIDTH_DEFECT] if with_defect else []))
+        ws.append(cols)
+        wrap = _style_header(ws)
+        for i, c in enumerate(cases, 1):
+            ws.append(case_row_legacy(c, i, with_env, with_remark, with_defect))
+        _set_widths(ws, widths)
+    else:
+        cols = COLUMNS + ([COLUMN_DEFECT] if with_defect else [])
+        widths = WIDTHS + ([WIDTH_DEFECT] if with_defect else [])
+        ws.append(cols)
+        wrap = _style_header(ws)
+        for i, c in enumerate(cases, 1):
+            row = case_row15(c, i)
+            if with_defect:
+                row = row + [defect_to_str(c.get("defect"))]
+            ws.append(row)
+        _set_widths(ws, widths)
     for row in ws.iter_rows(min_row=2):
         for cell in row:
             cell.alignment = wrap
@@ -139,17 +209,19 @@ def build_workbook(cases, with_env=False, with_remark=False, with_defect=False):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="测试用例 JSON → Excel（默认 10 列；--with-environment 插入测试环境列；"
-                    "--with-remark 追加备注列；--with-defect 追加关联缺陷列，可叠加）")
+        description="测试用例 JSON → Excel（默认 15 列优秀库对齐表头；--legacy 回旧 10 列；"
+                    "--with-defect 追加关联缺陷列；--with-rtm 追加需求追溯 sheet）")
     ap.add_argument("input", nargs="?", help="用例 JSON 文件路径")
     ap.add_argument("-o", "--output", required=False, help="输出 .xlsx 路径")
     ap.add_argument("--emit-template", metavar="PATH", help="仅生成空白模板到指定路径")
+    ap.add_argument("--legacy", action="store_true",
+                    help="输出旧 10 列（兼容既有项目约定）；默认 15 列优秀库对齐表头")
     ap.add_argument("--with-environment", action="store_true",
-                    help="输出 11 列：在「前置条件」前增加「测试环境」列（双前置列实证模式）")
+                    help="[仅 --legacy] 旧 10 列模式插入「测试环境」列（15 列默认已内置）")
     ap.add_argument("--with-remark", action="store_true",
-                    help="在末尾追加「备注」列（范围性用例逐项展开子场景操作用）")
+                    help="[仅 --legacy] 旧 10 列模式追加「备注」列（15 列默认已内置）")
     ap.add_argument("--with-defect", action="store_true",
-                    help="在末尾追加「关联缺陷」列（Step 6.5 缺陷反哺后回填；可与前两个参数叠加）")
+                    help="追加「关联缺陷」列（Step 6.5 缺陷反哺后回填）")
     ap.add_argument("--with-rtm", metavar="REQUIREMENTS",
                     help="在第二个 sheet 追加「需求追溯」矩阵（需 requirements.json）")
     args = ap.parse_args()
@@ -161,37 +233,52 @@ def main():
               "别去改用例或改参数）", file=sys.stderr)
         return 4
 
+    legacy = args.legacy
+    if not legacy and (args.with_environment or args.with_remark):
+        print("[提示] 15 列默认表头已内置「测试环境」「备注」列，"
+              "--with-environment / --with-remark 仅在 --legacy 模式下生效（本次忽略）。",
+              file=sys.stderr)
+
     if args.emit_template:
         wb = Workbook()
         ws = wb.active
         ws.title = "功能测试用例"
-        cols = ((COLUMNS_WITH_ENV if args.with_environment else COLUMNS)
-                + ([COLUMN_REMARK] if args.with_remark else [])
-                + ([COLUMN_DEFECT] if args.with_defect else []))
+        if legacy:
+            cols = ((LEGACY_WITH_ENV if args.with_environment else LEGACY_COLUMNS)
+                    + ([("备注")] if args.with_remark else [])
+                    + ([COLUMN_DEFECT] if args.with_defect else []))
+            widths = ((LEGACY_WIDTHS_ENV if args.with_environment else LEGACY_WIDTHS)
+                      + ([WIDTH_REMARK] if args.with_remark else [])
+                      + ([WIDTH_DEFECT] if args.with_defect else []))
+            sample = ["TC-001", "示例模块", "正确密码登录", "P1", "功能测试"]
+            if args.with_environment:
+                sample += ["1.手机连接可用网络\n2.滑板车设备上电"]
+            sample += ["1. 用户已注册\n2. 网络正常",
+                       "1. 输入手机号\n2. 输入密码\n3. 点击登录",
+                       "1. 接受输入\n2. 掩码显示\n3. 跳转首页",
+                       "功能测试", "场景法 / 等价类划分"]
+            if args.with_remark:
+                sample += ["【场景展开·2 项】…"]
+        else:
+            cols = COLUMNS + ([COLUMN_DEFECT] if args.with_defect else [])
+            widths = WIDTHS + ([WIDTH_DEFECT] if args.with_defect else [])
+            sample = ["TC-001", "APP", "APP-启动", "公共", "点击图标能正常进入启动界面",
+                      "P1", "界面交互测试", "国内版本, 国外版本",
+                      "1.手机连接可用网络", "1. App 已安装",
+                      "1. 点击 APP 图标", "1. 应能进入 APP 启动界面",
+                      "", "账号=test01", ""]
+            if args.with_defect:
+                sample += ["BUG-1234567（已修复）"]
         ws.append(cols)
         from openpyxl.styles import Font, PatternFill, Alignment
-        fill = PatternFill("solid", fgColor="305496")
-        font = Font(bold=True, color="FFFFFF")
+        _fill = PatternFill("solid", fgColor="305496")
+        _font = Font(bold=True, color="FFFFFF")
         for cell in ws[1]:
-            cell.fill = fill
-            cell.font = font
+            cell.fill = _fill
+            cell.font = _font
             cell.alignment = Alignment(vertical="top", wrap_text=True)
-        sample_core = ["TC-001", "示例模块", "正确密码登录", "P1", "功能测试"]
-        sample_env = ["1.手机连接可用网络\n2.滑板车设备上电"]
-        sample_tail = ["1. 用户已注册\n2. 网络正常",
-                       "1. 输入手机号\n2. 输入密码\n3. 点击登录", "1. 接受输入\n2. 掩码显示\n3. 跳转首页",
-                       "功能测试", "场景法 / 等价类划分"]
-        sample = sample_core + (sample_env if args.with_environment else []) + sample_tail
-        if args.with_remark:
-            sample = sample + ["【场景展开·2 项】…"]
-        if args.with_defect:
-            sample = sample + ["BUG-1234567（已修复）"]
         ws.append(sample)
-        widths = ((WIDTHS_WITH_ENV if args.with_environment else WIDTHS)
-                  + ([WIDTH_REMARK] if args.with_remark else [])
-                  + ([WIDTH_DEFECT] if args.with_defect else []))
-        for i, w in enumerate(widths, 1):
-            ws.column_dimensions[chr(64 + i)].width = w
+        _set_widths(ws, widths)
         wb.save(args.emit_template)
         print(f"[✓] 已生成模板: {args.emit_template}（{len(cols)} 列）")
         return 0
@@ -210,7 +297,8 @@ def main():
     if bad:
         print(f"[警告] 以下用例优先级非法（应为 P0-P3）: {bad[:10]}", file=sys.stderr)
 
-    wb = build_workbook(cases, args.with_environment, args.with_remark, args.with_defect)
+    wb = build_workbook(cases, legacy=legacy, with_env=args.with_environment,
+                        with_remark=args.with_remark, with_defect=args.with_defect)
     if args.with_rtm:
         try:
             import coverage_audit
@@ -223,8 +311,11 @@ def main():
         except Exception as e:
             print(f"[警告] 需求追溯 sheet 生成失败: {e}", file=sys.stderr)
     wb.save(args.output)
-    ncol = (len(COLUMNS) + (1 if args.with_environment else 0)
-            + (1 if args.with_remark else 0) + (1 if args.with_defect else 0))
+    if legacy:
+        ncol = (len(LEGACY_COLUMNS) + (1 if args.with_environment else 0)
+                + (1 if args.with_remark else 0) + (1 if args.with_defect else 0))
+    else:
+        ncol = len(COLUMNS) + (1 if args.with_defect else 0)
     print(f"[✓] 已生成 Excel: {args.output}（{len(cases)} 条用例，{ncol} 列）")
     return 0
 

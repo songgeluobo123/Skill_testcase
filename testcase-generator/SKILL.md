@@ -118,7 +118,7 @@ UI / 视觉 / 文案维度（界面交互、UI 元素清单、文字查验、数
 
 ### Step 4 — 测试用例模板确认
 
-1. 用 `references/output_format.md` 的 10 列 Excel 模板规范；若项目有历史模板，运行 `scripts/to_excel.py --emit-template 模板.xlsx` 生成并对照。
+1. 用 `references/output_format.md` 的 **15 列 Excel 模板规范**（v1.11.5 优秀库对齐：管理 4 列 + 用例 8 列 + 执行与追溯 3 列）；若项目有历史模板，运行 `scripts/to_excel.py --emit-template 模板.xlsx` 生成并对照。
 2. **学习历史编写习惯**（见 `references/case_design.md`）：前置/步骤粒度、四字段编写规范（标题/前置/步骤/预期，见第二节）、步骤数=预期数、命名 ≤30 字无前缀无【】（详见 `references/naming_rules.md` 七条强制红线）、优先级统一采用 P0–P3 四级（见 `references/priority_p0_p3.md`）。
 
 **本步输出**：模板规范（供 Step 5/6）。
@@ -178,7 +178,7 @@ UI / 视觉 / 文案维度（界面交互、UI 元素清单、文字查验、数
 ### Step 6 — 测试用例输出
 
 1. 把审阅通过的用例结构化到 `test_cases.json`。
-2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（10 列，详见 `references/output_format.md`）。项目要求"环境准备 / 界面状态"分列时加 `--with-environment` 输出 11 列（双前置列，见 `excellent_case_patterns.md` 做法 1）；用例中存在**范围性用例**（一条覆盖多个并列子场景）时加 `--with-remark` 在末列输出「备注」列承载场景展开（见门禁速查 13）；完成 Step 6.5 缺陷反哺后要落"这条用例关联过哪些真实缺陷"时加 `--with-defect`（末列「关联缺陷」，可与前两者叠加为 12/13 列，**不加则与旧版完全一致**）；需要**双向需求追溯**时加 `--with-rtm requirements.json`，在**第二个 sheet「需求追溯」**输出需求→用例 / 用例→需求 / 孤儿用例矩阵（见 `coverage_audit.md` 四·五）。
+2. **导出 Excel（强制）**：`scripts/to_excel.py test_cases.json -o "test_output/{版本+需求名}/testcase/{版本} 功能测试用例.xlsx"`（**默认 15 列**，详见 `references/output_format.md`；「测试环境」「备注」「实际结果」「测试数据」已内置，范围性用例的场景展开写备注列）。JSON 可选字段：`top_module`（顶级功能模块）、`device`（设备型号，缺省「公共」）、`app_version`（APP版本类型）、`actual`（实际结果，执行后回填）。既有 10 列项目用 `--legacy` 兼容；完成 Step 6.5 缺陷反哺后要落"这条用例关联过哪些真实缺陷"时加 `--with-defect`（末列「关联缺陷」，可与前两者叠加为 12/13 列，**不加则与旧版完全一致**）；需要**双向需求追溯**时加 `--with-rtm requirements.json`，在**第二个 sheet「需求追溯」**输出需求→用例 / 用例→需求 / 孤儿用例矩阵（见 `coverage_audit.md` 四·五）。
 3. **可选 XMind**：`scripts/to_xmind.py test_cases.json -o report.xmind --project <项目名>`。
 4. **质量评分**：`scripts/score_testcases.py test_cases.json`（**每项维度均需 ≥90**，任一不足即回退重生成）。
 5. **可选：覆盖率评审**：`scripts/coverage_audit.py test_cases.json requirements.json -o 覆盖率报告.md`（见 `references/coverage_audit.md`）。做**模块级**下钻，防"全局 95% 掩盖某模块 40%"；接手**存量用例库**时把第一个参数换成历史 `.xlsx` 即可直接评审。需要**双向追溯**时加 `--rtm-xlsx <用例Excel>`，把需求→用例 / 用例→需求 / 孤儿用例写入第二个 sheet。
