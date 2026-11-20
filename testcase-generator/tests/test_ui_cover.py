@@ -96,6 +96,26 @@ few = [mk(f"TC-G-{i:03d}", "订单") for i in range(15)]
 r = run(few, "small_lib")
 check("整库 <50 条且模块 <20 条 → 不误报", "UI 覆盖缺失" not in r.stdout, r.stdout[-500:])
 
+
+# ---------- 八、9c test_type 值域校验 ----------
+# SKILL.md 定义了「两族并存，不得自造」，但没有闸门执行 = 规则没长在必经之路上。
+# 历史短写法（「功能」「异常」…）经 TT_ALIAS 归一后放行——test_prescreen9 夹具即用短写。
+ok_tt = [mk("TC-H-001", "订单", "模块功能测试"), mk("TC-H-002", "订单", "功能"),
+         mk("TC-H-003", "订单", "异常"), mk("TC-H-004", "订单", "界面交互测试")]
+r = run(ok_tt, "tt_ok")
+check("9c 合法类型（含短写归一）→ 通过", "test_type 不在值域内" not in r.stdout,
+      r.stdout[-500:])
+
+bad_tt = [mk("TC-I-001", "订单", "稳定性测试"), mk("TC-I-002", "订单", "功能测试")]
+r = run(bad_tt, "tt_bad")
+check("9c 自造类型（稳定性测试）→ 拦截并点名",
+      "test_type 不在值域内" in r.stdout and "TC-I-001" in r.stdout
+      and "稳定性测试" in r.stdout, r.stdout[-600:])
+check("9c 拦截为 fail（阻断）", r.returncode == 1, f"exit={r.returncode}")
+
+r = run(bad_tt, "tt_off", extra=["--ttype-mode", "off"])
+check("9c --ttype-mode off 关闭", "test_type 不在值域内" not in r.stdout, r.stdout[-500:])
+
 print("\n" + "=" * 30)
 print(f"通过 {PASS}/{PASS + FAIL}")
 if FAILS:

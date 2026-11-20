@@ -104,6 +104,35 @@ BRACKET_RE = re.compile(r"（[^（）]*）|\([^()]*\)")
 # 第 9b 项：UI 族类型清单（与 ui_case_design.md 六类对齐，兼容旧写法「UI测试/界面测试/视觉测试」）
 UI_TEST_TYPES = ("界面交互测试", "UI测试", "UI元素测试", "界面测试", "文字查验测试",
                  "用户体验测试", "模块交互测试", "视觉测试")
+
+# 第 9c 项：test_type 值域（两族 17 类 + 跨族通用 3 类，与 SKILL.md Step 5 定义一致；
+# 优秀库 1278 条全部落在内）。历史短写法（「功能」「异常」「边界」…）经 TT_ALIAS
+# 归一后放行——它们是既有库的真实写法，判「自造」会误伤（test_prescreen9 夹具即用短写）。
+VALID_TEST_TYPES = (
+    # 功能族
+    "模块功能测试", "主流程测试", "异常测试", "边界测试", "权限测试",
+    "兼容测试", "性能测试", "接口测试",
+    # UI 族
+    "界面交互测试", "UI测试", "UI元素测试", "界面测试", "文字查验测试",
+    "数据展示测试", "用户体验测试", "模块交互测试", "视觉测试",
+    # 跨族通用
+    "功能测试", "数据测试", "等价类测试",
+)
+TT_ALIAS = {
+    "功能": "功能测试", "异常": "异常测试", "边界": "边界测试", "权限": "权限测试",
+    "兼容": "兼容测试", "性能": "性能测试", "接口": "接口测试", "主流程": "主流程测试",
+    "UI": "UI测试", "界面": "界面交互测试", "交互": "界面交互测试", "数据": "数据测试",
+    "等价类": "等价类测试", "体验": "用户体验测试", "模块交互": "模块交互测试",
+    "文字": "文字查验测试", "文案": "文字查验测试", "视觉": "视觉测试",
+}
+
+
+def norm_test_type(tt):
+    """短写归一：不在白名单时先查别名表，命中即视为合法全称。"""
+    tt = tt.strip()
+    if tt in VALID_TEST_TYPES:
+        return tt
+    return TT_ALIAS.get(tt, tt)
 # 检查 8：标题占位残留
 TITLE_PLACEHOLDER = re.compile(r"待.{0,6}更新|TBD|TODO|XXX+|xxxx|【】|\[\]", re.IGNORECASE)
 
@@ -456,6 +485,9 @@ def main():
                     help="第9b项豁免模块（纯后台/流程型，如版本更新、下载安装、物模型数据），逗号分隔")
     ap.add_argument("--ui-cover-mode", choices=["off", "warn", "block"], default="warn",
                     help="第9b项 UI 覆盖检查强度（默认 warn）")
+    ap.add_argument("--ttype-mode", choices=["off", "block"], default="block",
+                    help="第9c项 test_type 值域校验（默认 block）：自造类型会让 9b 的 UI 统计"
+                         "与第 4 项方法统计失真。值域=功能族 8 类 + UI 族 6 类 + 通用 3 类")
     ap.add_argument("--scene-rule-mode", choices=["off", "warn", "block"], default="warn",
                     help="第13项需求级场景配额强度（默认 warn）")
     ap.add_argument("--min-neg-per-rule", type=int, default=3,
@@ -813,6 +845,24 @@ def main():
         else:
             print(f"[✓] UI 覆盖达标（整库 {lib_ui}/{lib_total} = "
                   f"{lib_ui / max(1, lib_total):.0%}，各模块 ≥{args.ui_cover_min:.0%}）")
+
+    # 9c. test_type 值域校验：SKILL.md 定义了「两族并存，不得自造」，必须有闸门执行——
+    #     否则生成器自造类型（如把异常/边界当类型用没问题，但造出「稳定性测试」这类
+    #     体系外类型）会让 9b 的 UI 统计、第 4 项方法统计全部失真，且无人发现。
+    #     实测：E-Bike 第五轮库的「功能测试/异常测试/边界测试/权限测试」均在功能族内合法；
+    #     优秀库 1278 条的类型也全部落在白名单内。空值跳过（第 4 项已有「全空跳过」逻辑）。
+    if args.ttype_mode == "block":
+        bad_tt = []
+        for c in cases:
+            tt = str(c.get("test_type", "") or "").strip()
+            if tt and norm_test_type(tt) not in VALID_TEST_TYPES:
+                bad_tt.append((c.get("id", "?"), tt))
+        if bad_tt:
+            fails.append(
+                f"{len(bad_tt)} 条用例 test_type 不在值域内（两族 17 类，"
+                f"见 SKILL.md Step 5；自造类型会让 UI 统计与方法统计失真）: {bad_tt[:10]}")
+        else:
+            print("[✓] test_type 全部在值域内")
 
     # 10. 孤儿用例（无 coverage_rule，且未标 exploratory；默认直接阻断）
     # 「全库都没有 coverage_rule 且没给需求清单」= 这份库根本不做需求追溯，
