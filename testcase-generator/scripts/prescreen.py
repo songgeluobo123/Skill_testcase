@@ -100,6 +100,10 @@ DESIGN_REF_RE = re.compile(r"设计稿|原型图|设计规范|UI对比")
 # 优秀库 1278 条回放：剔除后三字段**零违规**，不剔除会误伤 9 条。
 INLINE_STEP_RE = re.compile(r"(?<!\d)(\d{1,2})\s*[.、．](?!\d)")
 BRACKET_RE = re.compile(r"（[^（）]*）|\([^()]*\)")
+
+# 第 9b 项：UI 族类型清单（与 ui_case_design.md 六类对齐，兼容旧写法「UI测试/界面测试/视觉测试」）
+UI_TEST_TYPES = ("界面交互测试", "UI测试", "UI元素测试", "界面测试", "文字查验测试",
+                 "用户体验测试", "模块交互测试", "视觉测试")
 # 检查 8：标题占位残留
 TITLE_PLACEHOLDER = re.compile(r"待.{0,6}更新|TBD|TODO|XXX+|xxxx|【】|\[\]", re.IGNORECASE)
 
@@ -443,6 +447,15 @@ def main():
     ap.add_argument("--matrix-mode", choices=["off", "warn", "block"], default="warn",
                     help="第12b项矩阵回指校验强度（默认 warn）。"
                          "不传 --matrix 但有用例声称边界值/等价类时，本项报「无矩阵支撑」")
+    ap.add_argument("--ui-cover-min", type=float, default=0.1,
+                    help="第9b项：模块 UI 族用例占比下限（默认 0.1；优秀库页面交互型模块 47%%~88%%，"
+                         "设备/流程类 30%%+，纯后台模块可为 0 走豁免）")
+    ap.add_argument("--ui-min-cases", type=int, default=20,
+                    help="第9b项：模块触发 UI 占比检查的最小用例数（默认 20，小模块不判）")
+    ap.add_argument("--ui-exempt-modules", default="",
+                    help="第9b项豁免模块（纯后台/流程型，如版本更新、下载安装、物模型数据），逗号分隔")
+    ap.add_argument("--ui-cover-mode", choices=["off", "warn", "block"], default="warn",
+                    help="第9b项 UI 覆盖检查强度（默认 warn）")
     ap.add_argument("--scene-rule-mode", choices=["off", "warn", "block"], default="warn",
                     help="第13项需求级场景配额强度（默认 warn）")
     ap.add_argument("--min-neg-per-rule", type=int, default=3,
@@ -753,6 +766,53 @@ def main():
         warns.append(f"{len(thin_neg)} 个模块负向用例偏少（建议 1 正向 : ≥3 异常/边界）: {thin_neg[:5]}")
     if no_perm:
         warns.append(f"{len(no_perm)} 个模块无权限校验类用例: {no_perm[:5]}")
+
+    # 9b. UI 覆盖分布（M3b）：整库 / 模块级的 UI 族用例占比
+    #
+    # 实测盲区：某生成库 745 条 UI 族 = **0 条**，预审当时全绿——因为 7b 只查
+    # 「UI 族用例的预期质量」，库里一条 UI 族都没有时它就哑了。
+    # 优秀库基线：页面交互型模块 UI 占比 47%~88%（登录 69% / 注册 69% / 注销 74% /
+    # 重置密码 77% / 配对绑定 73%），设备与流程类 30%+；
+    # 纯后台/流程型模块（版本更新 / 下载安装 / 物模型数据）为 0 —— 走 --ui-exempt-modules 豁免。
+    exempt_ui = {x.strip() for x in str(args.ui_exempt_modules).split(",") if x.strip()}
+    if args.ui_cover_mode != "off":
+        mm9b = {}
+        for c in cases:
+            m = str(c.get("module", "") or "") or "(未分模块)"
+            d = mm9b.setdefault(m, [0, 0])
+            d[0] += 1
+            if str(c.get("test_type", "") or "") in UI_TEST_TYPES:
+                d[1] += 1
+        lib_total = sum(d[0] for d in mm9b.values())
+        lib_ui = sum(d[1] for d in mm9b.values())
+        # 整库判据只看**非豁免模块**：全是纯后台模块的库（全豁免）不算"零 UI"
+        nx_total = sum(tot for m, (tot, ui) in mm9b.items() if m not in exempt_ui)
+        nx_ui = sum(ui for m, (tot, ui) in mm9b.items() if m not in exempt_ui)
+        zero_lib = nx_total >= 50 and nx_ui == 0
+        thin = []
+        for m, (tot, ui) in sorted(mm9b.items(), key=lambda kv: -kv[1][0]):
+            if tot < args.ui_min_cases or m in exempt_ui:
+                continue
+            if ui / tot < args.ui_cover_min:
+                thin.append((m, ui, tot))
+        if thin or zero_lib:
+            parts = []
+            if zero_lib:
+                parts.append(f"整库 {lib_total} 条 UI 族用例为 0 条")
+            if thin:
+                parts += [f"{m}({ui}/{tot}, {ui/tot:.0%})" for m, ui, tot in thin[:8]]
+            msg = (f"UI 覆盖缺失：{'；'.join(parts)}"
+                   + (f"（共 {len(thin)} 个模块低于 {args.ui_cover_min:.0%}）" if thin else "")
+                   + "。页面型功能点应补界面交互 / UI 元素 / 文字查验类用例"
+                     "（生成规则见 ui_case_design.md；纯后台模块用 --ui-exempt-modules 豁免）")
+            if args.ui_cover_mode == "block":
+                fails.append(msg)
+            else:
+                warns.append(msg)
+            print(f"[!] UI 覆盖：{'；'.join(parts)}")
+        else:
+            print(f"[✓] UI 覆盖达标（整库 {lib_ui}/{lib_total} = "
+                  f"{lib_ui / max(1, lib_total):.0%}，各模块 ≥{args.ui_cover_min:.0%}）")
 
     # 10. 孤儿用例（无 coverage_rule，且未标 exploratory；默认直接阻断）
     # 「全库都没有 coverage_rule 且没给需求清单」= 这份库根本不做需求追溯，
