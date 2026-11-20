@@ -522,6 +522,10 @@ def main():
                     help="第9b项豁免模块（纯后台/流程型，如版本更新、下载安装、物模型数据），逗号分隔")
     ap.add_argument("--ui-cover-mode", choices=["off", "warn", "block"], default="warn",
                     help="第9b项 UI 覆盖检查强度（默认 warn）")
+    ap.add_argument("--step-lines-mode", choices=["warn", "block"], default="block",
+                    help="第8b项编号步骤换行检查强度（默认 block）：一行多编号直接阻断。"
+                         "「每个步骤都要换行」是格式硬规则，不能只告警；"
+                         "历史库批量改造时可临时用 warn 先跑 diff")
     ap.add_argument("--ui-item-visual-min", type=float, default=0.6,
                     help="7b 逐项视觉属性下限（默认 0.6）：UI 元素清单里带视觉属性（颜色/位置/形状）"
                          "的子项占比低于该值 → 告警。只查整条有没有视觉词会漏掉"
@@ -807,9 +811,13 @@ def main():
     if placeholder:
         fails.append(f"{len(placeholder)} 条用例标题含占位残留（待XX更新/TBD/XXX）: {placeholder[:5]}")
     if inline_steps:
-        warns.append(f"{len(inline_steps)} 条用例存在「同行多编号」步骤（前置/步骤/预期每条编号"
-                     f"必须换行，一行一步）: "
-                     + "、".join(f"{c}({f} 第{i}行)" for c, f, i in inline_steps[:10]))
+        msg = (f"{len(inline_steps)} 条用例存在「同行多编号」步骤（前置/步骤/预期每条编号"
+               f"必须换行，一行一步）: "
+               + "、".join(f"{c}({f} 第{i}行)" for c, f, i in inline_steps[:10]))
+        if args.step_lines_mode == "block":
+            fails.append(msg)
+        else:
+            warns.append(msg)
         print(f"[!] 步骤换行：{len(inline_steps)} 条用例存在同行多编号（每步应独占一行）")
     dup_titles = [(k[1], v) for k, v in title_map.items() if len(v) > 1]
     if dup_titles:

@@ -45,10 +45,10 @@ RELAX = ["--coverage-min", "0", "--p0-min", "0", "--p0-max", "1",
          "--p2-min", "0", "--p2-max", "1", "--scene-min-cases", "99"]
 
 
-def run(cases, tag, rules=None):
+def run(cases, tag, rules=None, extra=()):
     p = os.path.join(TMP, f"{tag}.json")
     json.dump(cases, open(p, "w", encoding="utf-8"), ensure_ascii=False)
-    cmd = [PY, SCRIPT, p] + RELAX
+    cmd = [PY, SCRIPT, p] + RELAX + list(extra)
     if rules:
         rp = os.path.join(TMP, "rules.json")
         json.dump(rules, open(rp, "w", encoding="utf-8"), ensure_ascii=False)
@@ -115,6 +115,69 @@ check("三字段同违规 → 逐字段各列一条", n_fields == 3,
       f"列出 {n_fields} 个字段 | {r.stdout[-500:]}")
 check("汇总告警按用例计数", "3 条用例存在「同行多编号」" in r.stdout or
       "1 条用例存在" not in r.stdout, r.stdout[-500:])
+
+
+# ---------- 七、8b 默认 block；导出层自动拆分兜底 ----------
+r = run([mk("TC-9", steps="1. 输入密码2. 点击登录按钮")], "block_default", rules=["R-001"])
+check("8b 默认 block（单行多编号 → exit 1）", r.returncode == 1, f"exit={r.returncode}")
+
+r = run([mk("TC-10", steps="1. 输入密码2. 点击登录按钮")], "block_off", rules=["R-001"],
+        extra=["--step-lines-mode", "warn"])
+check("--step-lines-mode warn 可临时降级", r.returncode == 0, f"exit={r.returncode}")
+
+# to_excel 自动拆分（导出层兜底：使用者打开 Excel 就是分行结果）
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    "t2e", os.path.join(SKILL, "scripts", "to_excel.py"))
+t2e = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(t2e)
+
+shot = ("1. 在“选择设备”界面中点击页面中的“添加设备”按钮2. 进入“发现设备”界面进行搜索"
+        "3. 在搜索到的设备列表中选择设备")
+out = t2e.split_inline_steps(shot)
+check("导出自动拆分：截图形态 → 3 行", len(out.splitlines()) == 3, repr(out))
+check("导出自动拆分：编号保留在各行行首",
+      all(x.startswith(("1.", "2.", "3.")) for x in out.splitlines()), repr(out))
+
+check("导出自动拆分不误伤版本号与小数",
+      len(t2e.split_inline_steps("1. 查看 v1.2.3 与 3.8-4.4 km/h2. 点击确认").splitlines()) == 2)
+check("导出自动拆分：单编号不拆",
+      len(t2e.split_inline_steps("1. 查验升级中页面元素").splitlines()) == 1)
+check("导出自动拆分：编号不递增不拆",
+      len(t2e.split_inline_steps("1. 见步骤3. 的说明").splitlines()) == 1)
+check("导出自动拆分：已分行保持",
+      t2e.split_inline_steps("1. 甲\n2. 乙") == "1. 甲\n2. 乙")
+
+# 端到端：单行 steps 导出后单元格内出现 3 行
+jx = os.path.join(TMP, "e2e.json")
+json.dump([{"id": "TC-E2E", "name": "截图形态用例", "module": "车辆连接", "priority": "P1",
+            "test_type": "界面交互测试", "precondition": "1. 已登录2. 蓝牙已开启",
+            "steps": "1. 在“选择设备”界面中点击“添加设备”按钮2. 进入“发现设备”界面搜索"
+                     "3. 在设备列表中选择设备",
+            "expected": "1. 应进入发现设备界面2. 应显示设备列表3. 应发起连接",
+            "test_data": {}, "design_method": ["场景法"]}],
+           open(jx, "w", encoding="utf-8"), ensure_ascii=False)
+ox = os.path.join(TMP, "e2e.xlsx")
+r2 = subprocess.run([PY, os.path.join(SKILL, "scripts", "to_excel.py"), jx, "-o", ox],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace")
+ok_e2e = False
+detail = r2.stdout[-300:] + r2.stderr[-300:]
+if os.path.exists(ox):
+    try:
+        from openpyxl import load_workbook
+        ws = load_workbook(ox).active
+        hdr = [c.value for c in ws[1]]
+        row = [c.value for c in ws[2]]
+        i_steps = hdr.index("测试步骤")
+        i_pre = hdr.index("前置条件")
+        i_exp = hdr.index("预期结果")
+        ok_e2e = (str(row[i_steps]).count("\n") == 2
+                  and str(row[i_pre]).count("\n") == 1
+                  and str(row[i_exp]).count("\n") == 2)
+        detail = f"steps={row[i_steps]!r}"
+    except Exception as e:
+        detail = f"读回失败 {e}"
+check("端到端：导出的三字段均已分行", ok_e2e, detail)
 
 print("\n" + "=" * 30)
 print(f"通过 {PASS}/{PASS + FAIL}")

@@ -34,6 +34,7 @@ v1.11.5 起默认输出 **15 列（优秀库对齐表头）**：
 
 import argparse
 import json
+import re
 import sys
 
 try:
@@ -88,6 +89,40 @@ def dm_to_str(dm):
     return " / ".join(dm)
 
 
+STEP_SPLIT_RE = re.compile(r"(?<!\d)(\d{1,2})\s*([.、．])(?!\d)")
+
+
+def split_inline_steps(text):
+    """把「1. 甲2. 乙3. 丙」拆成每步一行（导出层兜底规范化）。
+
+    只拆**编号递增**的序列（1→2→3…），避免误伤版本号（v1.2.3）、小数（3.8-4.4）、
+    日期（2025.03）——它们要么不匹配正则（点后接数字），要么编号不递增。
+    已有换行的行逐行处理；单编号行原样返回。
+
+    为什么在导出层做：预审 8b 管「生成时写对」，这里管「导出的表一定是对的」——
+    使用者打开 Excel 时看到的就是分行结果，不用回头改 JSON。
+    """
+    if not text:
+        return text
+    out_lines = []
+    for line in str(text).split("\n"):
+        marks = list(STEP_SPLIT_RE.finditer(line))
+        if len(marks) < 2:
+            out_lines.append(line)
+            continue
+        nums = [int(m.group(1)) for m in marks]
+        if not all(b == a + 1 for a, b in zip(nums, nums[1:])):
+            out_lines.append(line)          # 编号不递增：可能是引用/手误，不拆
+            continue
+        seg, last = [], 0
+        for m in marks:
+            seg.append(line[last:m.start()])
+            last = m.start()
+        seg.append(line[last:])
+        out_lines.extend(x.strip() for x in seg if x.strip())
+    return "\n".join(out_lines)
+
+
 def td_to_str(v):
     """测试数据：dict 逐对换行 `键=值`；数组「；」拼接；其余原样。"""
     if not v:
@@ -110,7 +145,7 @@ def defect_to_str(v):
     return str(v)
 
 
-def case_row15(c, seq):
+def case_row15(c, seq, split=True):
     """15 列行：顶级功能模块/设备型号/APP版本类型/实际结果为新增位，缺省规则见文件头。"""
     cid = c.get("id") or f"TC-{seq:03d}"
     return [
@@ -123,16 +158,16 @@ def case_row15(c, seq):
         c.get("test_type") or "功能测试",
         c.get("app_version", ""),
         c.get("environment", ""),
-        c.get("precondition", ""),
-        c.get("steps", ""),
-        c.get("expected", ""),
+        split_inline_steps(c.get("precondition", "")) if split else c.get("precondition", ""),
+        split_inline_steps(c.get("steps", "")) if split else c.get("steps", ""),
+        split_inline_steps(c.get("expected", "")) if split else c.get("expected", ""),
         c.get("actual", ""),
         td_to_str(c.get("test_data")),
         c.get("remark", ""),
     ]
 
 
-def case_row_legacy(c, seq, with_env=False, with_remark=False, with_defect=False):
+def case_row_legacy(c, seq, with_env=False, with_remark=False, with_defect=False, split=True):
     cid = c.get("id") or f"TC-{seq:03d}"
     core = [
         cid,
@@ -143,9 +178,9 @@ def case_row_legacy(c, seq, with_env=False, with_remark=False, with_defect=False
     ]
     env = [c.get("environment", "")]
     tail = [
-        c.get("precondition", ""),
-        c.get("steps", ""),
-        c.get("expected", ""),
+        split_inline_steps(c.get("precondition", "")) if split else c.get("precondition", ""),
+        split_inline_steps(c.get("steps", "")) if split else c.get("steps", ""),
+        split_inline_steps(c.get("expected", "")) if split else c.get("expected", ""),
         c.get("stage") or "功能测试",
         dm_to_str(c.get("design_method")),
     ]
@@ -174,7 +209,7 @@ def _set_widths(ws, widths):
 
 
 def build_workbook(cases, legacy=False, with_env=False, with_remark=False,
-                   with_defect=False):
+                   with_defect=False, split=True):
     wb = Workbook()
     ws = wb.active
     ws.title = "功能测试用例"
@@ -188,7 +223,7 @@ def build_workbook(cases, legacy=False, with_env=False, with_remark=False,
         ws.append(cols)
         wrap = _style_header(ws)
         for i, c in enumerate(cases, 1):
-            ws.append(case_row_legacy(c, i, with_env, with_remark, with_defect))
+            ws.append(case_row_legacy(c, i, with_env, with_remark, with_defect, split))
         _set_widths(ws, widths)
     else:
         cols = COLUMNS + ([COLUMN_DEFECT] if with_defect else [])
@@ -196,7 +231,7 @@ def build_workbook(cases, legacy=False, with_env=False, with_remark=False,
         ws.append(cols)
         wrap = _style_header(ws)
         for i, c in enumerate(cases, 1):
-            row = case_row15(c, i)
+            row = case_row15(c, i, split)
             if with_defect:
                 row = row + [defect_to_str(c.get("defect"))]
             ws.append(row)
@@ -222,6 +257,9 @@ def main():
                     help="[仅 --legacy] 旧 10 列模式追加「备注」列（15 列默认已内置）")
     ap.add_argument("--with-defect", action="store_true",
                     help="追加「关联缺陷」列（Step 6.5 缺陷反哺后回填）")
+    ap.add_argument("--no-split-steps", action="store_true",
+                    help="关闭导出层的编号步骤自动拆分（默认开启：按递增编号把"
+                         "「1.甲2.乙」拆成多行；v1.12.2 起为默认）")
     ap.add_argument("--with-rtm", metavar="REQUIREMENTS",
                     help="在第二个 sheet 追加「需求追溯」矩阵（需 requirements.json）")
     args = ap.parse_args()
@@ -298,7 +336,8 @@ def main():
         print(f"[警告] 以下用例优先级非法（应为 P0-P3）: {bad[:10]}", file=sys.stderr)
 
     wb = build_workbook(cases, legacy=legacy, with_env=args.with_environment,
-                        with_remark=args.with_remark, with_defect=args.with_defect)
+                        with_remark=args.with_remark, with_defect=args.with_defect,
+                        split=not args.no_split_steps)
     if args.with_rtm:
         try:
             import coverage_audit
