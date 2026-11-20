@@ -112,6 +112,8 @@ VALID_TEST_TYPES = (
     # 功能族
     "模块功能测试", "主流程测试", "异常测试", "边界测试", "权限测试",
     "兼容测试", "性能测试", "接口测试",
+    # 非功能族（v1.12.0，见 nonfunctional_test_design.md）
+    "可靠性测试", "安全性测试", "易用性测试",
     # UI 族
     "界面交互测试", "UI测试", "UI元素测试", "界面测试", "文字查验测试",
     "数据展示测试", "用户体验测试", "模块交互测试", "视觉测试",
@@ -124,6 +126,17 @@ TT_ALIAS = {
     "UI": "UI测试", "界面": "界面交互测试", "交互": "界面交互测试", "数据": "数据测试",
     "等价类": "等价类测试", "体验": "用户体验测试", "模块交互": "模块交互测试",
     "文字": "文字查验测试", "文案": "文字查验测试", "视觉": "视觉测试",
+    "可靠": "可靠性测试", "可靠性": "可靠性测试", "安全": "安全性测试",
+    "安全性": "安全性测试", "易用": "易用性测试", "易用性": "易用性测试",
+}
+
+# 第 9d 项：非功能五特性分组（安全组并入权限测试——权限是安全的子集）
+NF_GROUPS = {
+    "性能": {"性能测试"},
+    "兼容性": {"兼容测试", "兼容性测试"},
+    "可靠性": {"可靠性测试"},
+    "安全性": {"安全性测试", "权限测试"},
+    "易用性": {"易用性测试"},
 }
 
 
@@ -488,6 +501,11 @@ def main():
     ap.add_argument("--ttype-mode", choices=["off", "block"], default="block",
                     help="第9c项 test_type 值域校验（默认 block）：自造类型会让 9b 的 UI 统计"
                          "与第 4 项方法统计失真。值域=功能族 8 类 + UI 族 6 类 + 通用 3 类")
+    ap.add_argument("--nf-cover-mode", choices=["off", "warn", "block"], default="warn",
+                    help="第9d项非功能五特性覆盖（默认 warn）：性能/兼容性/可靠性/安全性/易用性"
+                         "各需 ≥1 条，缺类点名（实测某库 745 条里可靠/安全/易用均 0 条）")
+    ap.add_argument("--nf-min-cases", type=int, default=20,
+                    help="第9d项触发检查的最小用例数（默认 20，小库不判）")
     ap.add_argument("--scene-rule-mode", choices=["off", "warn", "block"], default="warn",
                     help="第13项需求级场景配额强度（默认 warn）")
     ap.add_argument("--min-neg-per-rule", type=int, default=3,
@@ -863,6 +881,34 @@ def main():
                 f"见 SKILL.md Step 5；自造类型会让 UI 统计与方法统计失真）: {bad_tt[:10]}")
         else:
             print("[✓] test_type 全部在值域内")
+
+    # 9d. 非功能五特性覆盖（M7）：性能/兼容性/可靠性/安全性/易用性各 ≥1 条
+    #
+    # 实测盲区：某项目 745 条用例里 性能 1 条、兼容 9 条、可靠 0 条、安全 0 条、易用 0 条，
+    # 而其真实缺陷大头恰好落在断连挂死、弱网升级失败、日志明文密码——非功能是缺陷主产区。
+    # 库级判据（非功能项常跨模块，不做模块级以免误报）；安全组并入权限测试（权限=安全子集）。
+    if args.nf_cover_mode != "off" and len(cases) >= args.nf_min_cases:
+        nf_hit = {k: 0 for k in NF_GROUPS}
+        for c in cases:
+            tt = norm_test_type(str(c.get("test_type", "") or ""))
+            for k, types in NF_GROUPS.items():
+                if tt in types:
+                    nf_hit[k] += 1
+        nf_missing = [k for k, n in nf_hit.items() if n == 0]
+        if nf_missing:
+            msg = (f"非功能覆盖缺失：{len(nf_missing)}/5 个质量特性零用例"
+                   f"（{'、'.join(nf_missing)}）；已覆盖 "
+                   + "、".join(f"{k}{nf_hit[k]}条" for k in NF_GROUPS if nf_hit[k])
+                   + "。生成规则见 nonfunctional_test_design.md（每特性 ≥1 条，"
+                     "纯后台/接口项目可在测试计划写明豁免）")
+            if args.nf_cover_mode == "block":
+                fails.append(msg)
+            else:
+                warns.append(msg)
+            print(f"[!] 非功能覆盖：缺 {'、'.join(nf_missing)}")
+        else:
+            print("[✓] 非功能五特性均有覆盖（" +
+                  "、".join(f"{k}{n}" for k, n in nf_hit.items()) + "）")
 
     # 10. 孤儿用例（无 coverage_rule，且未标 exploratory；默认直接阻断）
     # 「全库都没有 coverage_rule 且没给需求清单」= 这份库根本不做需求追溯，

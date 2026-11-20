@@ -54,7 +54,7 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (21 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (22 files; organized by layer below, physically flat)
 │   ├── analysis_gate.md      # ★ analysis gate & hard constraints (two phases + STOP & ASK + H1–H5)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
 │   ├── naming_rules.md       # 7 hard naming red-lines + case-ID convention (TC-{module}-{seq})
