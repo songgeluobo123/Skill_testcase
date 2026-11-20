@@ -78,6 +78,21 @@ UNJUDGEABLE_WORDS = [
 ]
 # 检查 7：可判定标志（应/必须/需/数值/阈值/逐字文案/清单编号）
 ASSERT_MARKERS = re.compile(r"应|必须|需|为[:：]|=\s*\d|>\s*\d|<\s*\d|\d|1[.、]|提示|显示为|保持")
+# 检查 7b：UI 族的两条附加判据（词表与判据锚定优秀库实测，见 ui_case_design.md）
+# 实测标定：优秀库 UI 族 509 条的预期，含**具体视觉值词**的占 45% —— 所以「每条必须含
+# 视觉词」的强规则不成立（会把优秀库一半打脸）。成立的是两条结构性判据：
+#   A. 标题声明「UI 元素」清单 → 预期必须真枚举（编号 ≥2 项），只写一句"显示完整"是壳；
+#   B. 预期**提了样式**（颜色/布局/对齐/字号…）却给不出**具体视觉值**（置灰/居中/黑色…），
+#      也没用「与设计稿一致」兜底 → 与"正常显示"同级不可判定。
+UI_LIST_TITLE = re.compile(r"UI元素|UI 元素|界面元素|页面元素")
+UI_LIST_ENUM = re.compile(r"(?:^|\n)\s*(?:\d{1,2}[.、．]|[①②③④⑤⑥⑦⑧⑨⑩])")
+STYLE_WORD_RE = re.compile(r"颜色|配色|布局|对齐|字号|字体|间距|样式")
+UI_VISUAL_VALUE_RE = re.compile(
+    r"黑色|白色|蓝色|红色|灰色|绿色|黄色|置灰|高亮|变蓝|变色"
+    r"|居中|居左|居右|左上角|右上角|底部|顶部"
+    r"|圆点|圆形|三角形|圆圈|插画|图标"
+    r"|闪烁|滚动|截断|省略")
+DESIGN_REF_RE = re.compile(r"设计稿|原型图|设计规范|UI对比")
 # 检查 8：标题占位残留
 TITLE_PLACEHOLDER = re.compile(r"待.{0,6}更新|TBD|TODO|XXX+|xxxx|【】|\[\]", re.IGNORECASE)
 
@@ -588,23 +603,50 @@ def main():
         print(f"[✓] 无语义重复用例")
 
     # 7. 预期结果可判定（不可判定词一票否决；缺断言标志仅告警）
+    #    7b 对 UI 族用例的附加要求：预期必须含**可观察视觉词**（颜色/位置/形状/状态动效）。
+    #    UI 用例回答的是「在屏幕上长什么样」，预期里连一个视觉词都没有 = 没说清长什么样。
+    #    「UI 元素」清单类（标题声明了元素清单）还要求预期真的枚举（编号 ≥2 项）——
+    #    只写一句"元素显示完整"的清单用例是壳。
     vague, no_marker = [], []
+    ui_thin_list = []
     for c in cases:
         exp = str(c.get("expected", "") or "")
+        title = str(c.get("name", "") or "") or str(c.get("title", "") or "")
+        cid = c.get("id", "?")
         if not exp.strip():
-            vague.append((c.get("id", "?"), "预期为空"))
+            vague.append((cid, "预期为空"))
             continue
         hit = [w for w in UNJUDGEABLE_WORDS if w in exp]
         if hit:
-            vague.append((c.get("id", "?"), "/".join(hit[:3])))
-        elif not ASSERT_MARKERS.search(exp):
-            no_marker.append(c.get("id", "?"))
+            vague.append((cid, "/".join(hit[:3])))
+            continue
+        # 7b-A：标题声明「UI 元素」清单，预期就必须真枚举
+        if UI_LIST_TITLE.search(title):
+            n_enum = len(UI_LIST_ENUM.findall(exp))
+            if n_enum < 2:
+                ui_thin_list.append((cid, n_enum))
+        # 7b-B：预期提了样式（颜色/布局/对齐/字体…）却给不出具体视觉值，
+        #        也没有「与设计稿一致」或「为：X」赋值兜底 → 与「正常显示」同级不可判定。
+        #        「为：已登录」这类赋值句是可判定的（优秀库实测误伤后加的豁免）。
+        sw = STYLE_WORD_RE.search(exp)
+        if (sw and not UI_VISUAL_VALUE_RE.search(exp)
+                and not DESIGN_REF_RE.search(exp)
+                and not re.search(r"为[:：]", exp)):
+            vague.append((cid, f"样式断言无具体值（{sw.group(0)}…）"))
+        if not ASSERT_MARKERS.search(exp):
+            no_marker.append(cid)
     if vague:
         fails.append(f"{len(vague)} 条用例预期结果不可判定（命中不可判定词或为空）: {vague[:10]}")
     else:
         print(f"[✓] 全部 {total} 条用例预期结果可判定")
     if no_marker:
         warns.append(f"{len(no_marker)} 条用例预期缺少断言标志（应/数值/逐字文案/清单编号），建议改写: {no_marker[:10]}")
+    if ui_thin_list:
+        warns.append(f"{len(ui_thin_list)} 条「UI 元素」清单用例预期枚举 <2 项（元素清单是壳，"
+                     f"生成规则见 ui_case_design.md 第二节）: "
+                     + "、".join(f"{c}({n}项)" for c, n in ui_thin_list[:10]))
+    if ui_thin_list:
+        print(f"[!] UI 元素清单：{len(ui_thin_list)} 条壳用例（预期未逐项枚举）")
 
     # 8. 标题规范与残缺检查
     bad_title, no_steps, placeholder = [], [], []

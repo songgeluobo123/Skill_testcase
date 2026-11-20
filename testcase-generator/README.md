@@ -55,7 +55,7 @@ testcase-generator/
 ├── README.md                # 中文总览（本文件）
 ├── README.en.md             # 英文总览
 ├── LICENSE                  # MIT
-├── references/              # 方法论与规范（20 篇，按下列分层组织，物理上同目录）
+├── references/              # 方法论与规范（21 篇，按下列分层组织，物理上同目录）
 │   ├── analysis_gate.md      # ★分析闸门与硬约束（两阶段 + STOP & ASK + H1–H5）
 │   ├── case_design.md        # ★用例编写规范唯一权威：设计原则 + 四字段规范 + 类型转化 + 优先级口径 + 粒度
 │   ├── naming_rules.md       # 命名 7 条强制红线 + 用例编号规范（TC-{模块}-{序号}）
