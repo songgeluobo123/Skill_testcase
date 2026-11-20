@@ -93,6 +93,13 @@ UI_VISUAL_VALUE_RE = re.compile(
     r"|圆点|圆形|三角形|圆圈|插画|图标"
     r"|闪烁|滚动|截断|省略")
 DESIGN_REF_RE = re.compile(r"设计稿|原型图|设计规范|UI对比")
+
+# 检查 8b：前置/步骤/预期的编号步骤必须每步一行。
+# 编号标记与 ITEM_SEQ_RE 同口径（(?<!\d)(?!\d) 挡 3.8-4.4、v1.0、1.15 这类数值）；
+# 括号内容先剔除——「（从上到下分别是：按钮1、按钮2、按钮3）」是括号枚举不是步骤，
+# 优秀库 1278 条回放：剔除后三字段**零违规**，不剔除会误伤 9 条。
+INLINE_STEP_RE = re.compile(r"(?<!\d)(\d{1,2})\s*[.、．](?!\d)")
+BRACKET_RE = re.compile(r"（[^（）]*）|\([^()]*\)")
 # 检查 8：标题占位残留
 TITLE_PLACEHOLDER = re.compile(r"待.{0,6}更新|TBD|TODO|XXX+|xxxx|【】|\[\]", re.IGNORECASE)
 
@@ -648,8 +655,9 @@ def main():
     if ui_thin_list:
         print(f"[!] UI 元素清单：{len(ui_thin_list)} 条壳用例（预期未逐项枚举）")
 
-    # 8. 标题规范与残缺检查
+    # 8. 标题规范与残缺检查 + 8b 多步骤必须每步一行
     bad_title, no_steps, placeholder = [], [], []
+    inline_steps = []
     title_map = {}
     for c in cases:
         cid = c.get("id", "?")
@@ -673,6 +681,19 @@ def main():
             title_map.setdefault((c.get("module", ""), norm(t)), []).append(cid)
         if not str(c.get("steps", "") or "").strip():
             no_steps.append(cid)
+        # 8b：前置 / 步骤 / 预期的编号步骤必须**每步一行**——一行里塞 1.甲2.乙3.丙
+        #     会把多条断言挤成一段，执行时只验第一条，且无法逐条判定。
+        #     判据锚优秀库实测：1278 条里三字段**零违规**（唯一的 9 处"同行多编号"
+        #     全是「（从上到下分别是：按钮1、按钮2、按钮3）」这类括号枚举，不是步骤）。
+        #     所以先剔除括号内容再数编号，一行 ≥2 个编号标记即违规。
+        for field in ("precondition", "steps", "expected"):
+            body = str(c.get(field, "") or "")
+            if not body.strip():
+                continue
+            bad = [(i, ln.strip()) for i, ln in enumerate(body.split("\n"), 1)
+                   if len(INLINE_STEP_RE.findall(BRACKET_RE.sub("", ln))) >= 2]
+            if bad:
+                inline_steps.append((cid, field, bad[0][1]))
 
     if bad_title:
         fails.append(f"{len(bad_title)} 条用例标题不合规（≤{args.title_max} 字 / 无序号前缀 / 无【】 / 无句末标点）: {bad_title[:10]}")
@@ -682,6 +703,11 @@ def main():
         fails.append(f"{len(no_steps)} 条用例缺失测试步骤（残缺条目不得入库）: {no_steps[:10]}")
     if placeholder:
         fails.append(f"{len(placeholder)} 条用例标题含占位残留（待XX更新/TBD/XXX）: {placeholder[:5]}")
+    if inline_steps:
+        warns.append(f"{len(inline_steps)} 条用例存在「同行多编号」步骤（前置/步骤/预期每条编号"
+                     f"必须换行，一行一步）: "
+                     + "、".join(f"{c}({f} 第{i}行)" for c, f, i in inline_steps[:10]))
+        print(f"[!] 步骤换行：{len(inline_steps)} 条用例存在同行多编号（每步应独占一行）")
     dup_titles = [(k[1], v) for k, v in title_map.items() if len(v) > 1]
     if dup_titles:
         warns.append(f"{len(dup_titles)} 组同模块标题重名，须靠唯一用例编号区分: {dup_titles[:5]}")
