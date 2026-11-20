@@ -85,7 +85,10 @@ ASSERT_MARKERS = re.compile(r"应|必须|需|为[:：]|=\s*\d|>\s*\d|<\s*\d|\d|1
 #   B. 预期**提了样式**（颜色/布局/对齐/字号…）却给不出**具体视觉值**（置灰/居中/黑色…），
 #      也没用「与设计稿一致」兜底 → 与"正常显示"同级不可判定。
 UI_LIST_TITLE = re.compile(r"UI元素|UI 元素|界面元素|页面元素")
-UI_LIST_ENUM = re.compile(r"(?:^|\n)\s*(?:\d{1,2}[.、．]|[①②③④⑤⑥⑦⑧⑨⑩])")
+# 行内编号也必须识别：`应展示 ① 阶段名 ② 进度 ③ 提示` 是合法枚举（ui_case_design 第二节）；
+# 早期版本锚定行首 `(?:^|\n)\s*`，行内带圈数字被算 0 项，真枚举被判壳用例。
+# 防小数/版本号误伤：编号前不接数字或小数点、后不接数字（3.8 / v1.2.3 / 2025.03 均不匹配）。
+UI_LIST_ENUM = re.compile(r"[①②③④⑤⑥⑦⑧⑨⑩]|(?<![\d.])(\d{1,2})\s*[.、．](?!\d)")
 STYLE_WORD_RE = re.compile(r"颜色|配色|布局|对齐|字号|字体|间距|样式")
 UI_VISUAL_VALUE_RE = re.compile(
     r"黑色|白色|蓝色|红色|灰色|绿色|黄色|置灰|高亮|变蓝|变色|深色|浅色"
@@ -93,6 +96,25 @@ UI_VISUAL_VALUE_RE = re.compile(
     r"|圆点|圆形|三角形|圆圈|插画|图标"
     r"|闪烁|滚动|截断|省略")
 DESIGN_REF_RE = re.compile(r"设计稿|原型图|设计规范|UI对比")
+
+
+def split_enum_items(text):
+    """按编号/带圈数字切分枚举项，返回各子项文本（用于逐项视觉属性检查）。
+
+    ui_case_design 要求「元素清单每项至少一个视觉属性」，但只查整条有没有视觉词
+    会漏掉「第 1 项写了居中、剩下 5 项只写应展示 X」的情况。
+    """
+    marks = list(UI_LIST_ENUM.finditer(text))
+    if len(marks) < 2:
+        return []
+    items = []
+    for i, m in enumerate(marks):
+        start = m.end()
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        seg = text[start:end].strip(" \t\n；;，,")
+        if seg:
+            items.append(seg)
+    return items
 
 # 检查 8b：前置/步骤/预期的编号步骤必须每步一行。
 # 编号标记与 ITEM_SEQ_RE 同口径（(?<!\d)(?!\d) 挡 3.8-4.4、v1.0、1.15 这类数值）；
@@ -158,7 +180,9 @@ NEG_KEYS = ["异常", "边界", "失败", "错误", "超限", "超时", "为空"
 # 检查 12：方法一致性（M2）——"声称用过某方法"必须有落地证据
 # 边界值分析：比较/极值词
 BOUNDARY_WORDS = ["大于", "小于", "等于", "≥", "≤", ">", "<", "超过", "低于", "超出",
-                  "不低于", "不高于", "上限", "下限", "最大", "最小", "边界", "临界", "阈值"]
+                  "不低于", "不高于", "上限", "下限", "上界", "下界",
+                  "枚举上限", "枚举下限", "量程",
+                  "最大", "最小", "边界", "临界", "阈值"]
 # 边界值分析：0/100 这类"值本身就是边界"的字面量（无比较词也成立，如"展示 0%"）
 BOUNDARY_LITERAL = re.compile(r"0\s*(?:%|％|km/h|公里|格|档|元|分钟|小时|秒|次)"
                               r"|100\s*(?:%|％)|满电|满格|满量程|满信号")
@@ -498,6 +522,10 @@ def main():
                     help="第9b项豁免模块（纯后台/流程型，如版本更新、下载安装、物模型数据），逗号分隔")
     ap.add_argument("--ui-cover-mode", choices=["off", "warn", "block"], default="warn",
                     help="第9b项 UI 覆盖检查强度（默认 warn）")
+    ap.add_argument("--ui-item-visual-min", type=float, default=0.6,
+                    help="7b 逐项视觉属性下限（默认 0.6）：UI 元素清单里带视觉属性（颜色/位置/形状）"
+                         "的子项占比低于该值 → 告警。只查整条有没有视觉词会漏掉"
+                         "「首项写了居中、其余只写应展示 X」")
     ap.add_argument("--ttype-mode", choices=["off", "block"], default="block",
                     help="第9c项 test_type 值域校验（默认 block）：自造类型会让 9b 的 UI 统计"
                          "与第 4 项方法统计失真。值域=功能族 8 类 + UI 族 6 类 + 通用 3 类")
@@ -678,7 +706,7 @@ def main():
     #    「UI 元素」清单类（标题声明了元素清单）还要求预期真的枚举（编号 ≥2 项）——
     #    只写一句"元素显示完整"的清单用例是壳。
     vague, no_marker = [], []
-    ui_thin_list = []
+    ui_thin_list, ui_weak_items = [], []
     for c in cases:
         exp = str(c.get("expected", "") or "")
         title = str(c.get("name", "") or "") or str(c.get("title", "") or "")
@@ -690,11 +718,18 @@ def main():
         if hit:
             vague.append((cid, "/".join(hit[:3])))
             continue
-        # 7b-A：标题声明「UI 元素」清单，预期就必须真枚举
+        # 7b-A：标题声明「UI 元素」清单，预期就必须真枚举；且**逐项**带视觉属性
+        #     （1.12.1）：只查整条有没有视觉词，会放过「首项写了居中、其余只写应展示 X」。
         if UI_LIST_TITLE.search(title):
             n_enum = len(UI_LIST_ENUM.findall(exp))
             if n_enum < 2:
                 ui_thin_list.append((cid, n_enum))
+            else:
+                items = split_enum_items(exp)
+                if items:
+                    vhit = sum(1 for x in items if UI_VISUAL_VALUE_RE.search(x))
+                    if vhit / len(items) < args.ui_item_visual_min:
+                        ui_weak_items.append((cid, f"{vhit}/{len(items)}"))
         # 7b-B：预期提了样式（颜色/布局/对齐/字体…）却给不出具体视觉值，
         #        也没有「与设计稿一致」或「为：X」赋值兜底 → 与「正常显示」同级不可判定。
         #        「为：已登录」这类赋值句是可判定的（优秀库实测误伤后加的豁免）。
@@ -717,6 +752,11 @@ def main():
                      + "、".join(f"{c}({n}项)" for c, n in ui_thin_list[:10]))
     if ui_thin_list:
         print(f"[!] UI 元素清单：{len(ui_thin_list)} 条壳用例（预期未逐项枚举）")
+    if ui_weak_items:
+        warns.append(f"{len(ui_weak_items)} 条 UI 元素清单的**子项缺视觉属性**"
+                     f"（占比 <{args.ui_item_visual_min:.0%}，逐项检查见 ui_case_design 第二节）: "
+                     + "、".join(f"{c}({r})" for c, r in ui_weak_items[:10]))
+        print(f"[!] UI 元素逐项属性：{len(ui_weak_items)} 条清单存在只写「应展示 X」的子项")
 
     # 8. 标题规范与残缺检查 + 8b 多步骤必须每步一行
     bad_title, no_steps, placeholder = [], [], []

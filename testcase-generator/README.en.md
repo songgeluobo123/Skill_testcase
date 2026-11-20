@@ -54,7 +54,7 @@ testcase-generator/
 ├── README.md                # Chinese documentation
 ├── README.en.md             # English documentation
 ├── LICENSE                  # MIT
-├── references/              # Methodology & specs (22 files; organized by layer below, physically flat)
+├── references/              # Methodology & specs (23 files; organized by layer below, physically flat)
 │   ├── analysis_gate.md      # ★ analysis gate & hard constraints (two phases + STOP & ASK + H1–H5)
 │   ├── case_design.md        # ★ sole authority for case authoring: design principles + 4-field spec + type mapping + priority + granularity
 │   ├── naming_rules.md       # 7 hard naming red-lines + case-ID convention (TC-{module}-{seq})
@@ -76,7 +76,7 @@ testcase-generator/
 │   ├── defect_loop.md        # ★Defect loop (real-defect layer): escape gap G4 + gap classes + backfill order
 │   ├── workflow.md           # Quality-assurance overview (five gates + one retrospective + accelerators)
 │   └── memory_mechanism.md   # Memory mechanism
-└── scripts/                 # Executable scripts (19, Python 3.13/3.14)
+└── scripts/                 # Executable scripts (20, Python 3.13/3.14)
     ├── extract_requirements.py  # Step1 extract requirement rule list
     ├── map_coverage.py          # Case ↔ requirement coverage mapping
     ├── prescreen.py             # Quality prescreen gate (14 checks)

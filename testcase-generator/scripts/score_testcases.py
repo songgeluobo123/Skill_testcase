@@ -63,6 +63,21 @@ DEFAULT_DATA_RULES = {
 
 PRIORITIES = {"P0", "P1", "P2", "P3"}
 
+# 可执行性判据（v1.12.1）：**语义优先，字数只做兜底**
+#
+# 旧口径「steps < 15 字扣 20 分」把「查验升级中页面元素」（动词+对象齐全、10 字）
+# 判成不可执行——而 ui_case_design 第七节明确说 UI 族步骤允许 1 步、预期承担信息量。
+# 两条规则打架时，改判语义：含动词白名单 + 对象（≥6 字）即合格。
+STEP_VERBS = ["点击", "输入", "勾选", "查验", "进入", "设置", "选择", "关闭", "上传", "下载",
+              "对比", "记录", "短按", "长按", "滑动", "切换", "拖拽", "双击", "等待",
+              "观察", "返回", "打开", "扫描", "连接", "断开", "重启", "检查", "确认",
+              "粘贴", "勾选", "取消", "拖到"]
+# 位置/容器词：判「点击按钮」是否说明了在哪点。旧表只有 导航/页面/右侧/左侧 四个词，
+# 「弹窗底部」「卡片内」「右上角」都被误判为"未说明位置"。
+POS_WORDS = ["导航", "页面", "右侧", "左侧", "顶部", "底部", "上方", "下方", "居中",
+             "右上角", "左上角", "弹窗", "对话框", "卡片", "列表", "区域", "栏",
+             "Tab", "面板", "浮层", "输入框", "工具条", "菜单", "图标"]
+
 
 def norm_priority(p):
     return (p or "").strip().upper()
@@ -174,13 +189,16 @@ def score_case(case, rules):
     if not pre:
         issues.append("缺少 precondition（前置条件），可执行性不足")
     if steps:
-        exec_score += 40 if len(steps) >= 15 else 20
-        if len(steps) < 15:
-            issues.append("steps 过短，步骤可能不清晰/不可操作")
-        # 模糊步骤启发式：只说'点击按钮'未说明位置
-        if "点击" in steps and "按钮" in steps and not ("导航" in steps or "页面" in steps or "右侧" in steps or "左侧" in steps):
+        has_verb = any(v in steps for v in STEP_VERBS)
+        semantic_ok = has_verb and len(steps) >= 6
+        exec_score += 40 if semantic_ok else 25
+        if not semantic_ok:
+            issues.append("steps 缺少明确动作动词或对象，可执行性不足"
+                          "（UI 族「查验 X 界面元素」这类短步骤合法，此处只判语义不判字数）")
+        # 模糊步骤启发式：只说'点击按钮'未说明位置/容器
+        if "点击" in steps and "按钮" in steps and not any(w in steps for w in POS_WORDS):
             exec_score = max(0, exec_score - 20)
-            issues.append("步骤含'点击按钮'但未说明位置，存在歧义")
+            issues.append("步骤含'点击按钮'但未说明位置或容器，存在歧义")
     else:
         issues.append("缺少 steps（测试步骤）")
 

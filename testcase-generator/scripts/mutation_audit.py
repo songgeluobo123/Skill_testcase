@@ -634,7 +634,8 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
     for x in rule_rows:
         # P0 不可测量 = 未验证。P0 是发布门禁，不允许"测不了"就默认过关。
         if x["priority"] == "P0" and x["score"] is None and not x["accepted"]:
-            msg = f"{x['id']} 为 P0 但不可测量（规则抽不出判别要素＝未验证）"
+            msg = (f"{x['id']} 为 P0 但不可测量（**需求侧问题**：规则抽不出判别要素；"
+                   f"不是用例缺陷，补需求结构化后重跑）")
             fails.append(msg)
             p0_fails.append(msg)
     for x in scored:
@@ -655,6 +656,13 @@ def audit(cases, rules, max_per_rule=DEFAULT_MAX_PER_RULE, semantic=None,
         "overall": overall, "mut_min": mut_min, "p0_mut_min": p0_mut_min,
         "min_mutants_for_zero": min_mutants_for_zero,
         "total_rules": len(rule_rows), "scored_rules": len(scored),
+        # 需求侧质量问题（与用例强度分开统计）：规则抽不出判别要素 = 需求文本不够结构化。
+        # 全局 overall 的分母本来就只含可测规则（scored），不可测量不进分母；
+        # 这里单列出来，是为了报告归因清晰——别让人以为是「用例写得差」。
+        "rule_quality_unmeasurable": [
+            {"id": x["id"], "priority": x["priority"], "module": x["module"],
+             "accepted": x["accepted"], "text": x["text"][:60]}
+            for x in unmeasurable],
         "total_mutants": len(mutants), "valid_mutants": len(valid),
         "ignored_mutants": len(mutants) - len(valid),
         "killed": total_killed,
@@ -790,8 +798,14 @@ def render_markdown(res, cases_path, reqs_path, scope="expected"):
             a(f"| {x['id']} | {shown}{more} | 补 `coverage_rule` 或复核是否误挂 |")
         a("")
 
-    a("## 五、不可测量规则（无法生成变异体）")
+    a("## 五、不可测量规则（需求侧问题，不计入全局变异得分）")
     a("")
+    if res.get("rule_quality_unmeasurable"):
+        a(f"> 本节 {len(res['rule_quality_unmeasurable'])} 条规则的根因在**需求文本**"
+          f"（既无数值、也无边界方向/否定/可观测动作），不是用例写得差——"
+          f"它们**不进全局得分分母**（分母只含可测规则 {res.get('scored_rules', 0)} 条）。")
+        a("> 处理顺序：先补需求结构化 → 再谈补用例。反过来做只会写出无判别力的用例。")
+        a("")
     if not res["unmeasurable"]:
         a("- 无。")
     else:
